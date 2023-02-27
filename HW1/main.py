@@ -147,7 +147,6 @@ def trainer(train_loader, valid_loader, model, config, device):
     # Define your optimization algorithm. 
     # TODO: Please check https://pytorch.org/docs/stable/optim.html to get more available algorithms.
     # TODO: L2 regularization (optimizer(weight decay...) or implement by your self).
-    # optimizer = torch.optim.NAdam(model.parameters(), lr=config['learning_rate'], betas=(0.9, 0.999), eps=1e-08, weight_decay=0, momentum_decay=0.004)
     optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'], betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
     writer = SummaryWriter() # Writer of tensoboard.
 
@@ -217,9 +216,9 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 config = {
     'seed': 5201314,      # Your seed number, you can pick your lucky number. :)
     'select_all': False,   # Whether to use all features.
-    'valid_ratio': 0.1,   # validation_size = train_size * valid_ratio
+    'valid_ratio': 0.2,   # validation_size = train_size * valid_ratio
     'n_epochs': 10000,     # Number of epochs.            
-    'batch_size': 256,
+    'batch_size': 512,
     'dropout': 0.0,
     'learning_rate': 1e-3,
     'model_structure': [16, 8, 1],
@@ -247,7 +246,7 @@ feature_selection_methods = [mutual_info_regression]
 best_loss_list = []
 for i, feature_selection_method in enumerate(feature_selection_methods):
     best_loss_list.append([])
-    # for k_best in range(10,30):
+    # for k_best in range(20,30):
     for k_best in range(27,28):
     
         x_train, x_valid, x_test, y_train, y_valid = select_feat(train_data, valid_data, test_data, config['select_all'], feature_selection_method, k_best)
@@ -287,4 +286,3 @@ if do_test:
     model.load_state_dict(torch.load(config['save_path']))
     preds = predict(test_loader, model, device) 
     save_pred(preds, 'pred.csv')  
-

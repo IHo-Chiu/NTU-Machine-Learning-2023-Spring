@@ -39,57 +39,40 @@ after running the following block.
 # !ls libriphone
 
 
-# """# Hyper-parameters"""
-
-# do_train = False
-# do_test = True
-
-# # data prarameters
-# # TODO: change the value of "concat_nframes" for medium baseline
-# concat_nframes = 55   # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
-# train_ratio = 1.0   # the ratio of data used for training, the rest will be used for validation
-
-# # training parameters
-# seed = 11922189              # random seed
-# batch_size = 128             # batch size
-# num_epoch = 50               # the number of training epoch
-# learning_rate = 1e-4         # learning rate
-# dropout = 0.5                # dropout
-# model_path = './model.ckpt'  # the path where the checkpoint will be saved
-
-# # model parameters
-# input_dim = 39 * concat_nframes # the input dim of the model, you should not change the value
-# use_encoder = True              # use GRU or not
-# encoder_layers = 2              # the number of encoder layers
-# encoder_dim = 1024               # the encoder dim
-# decoder_structure = [4096,2048,2048,1024,1024,512]
-
-
 """# Hyper-parameters"""
 
-do_train = False
-do_test = True
+do_train = True
+do_test = False
 
 # data prarameters
 # TODO: change the value of "concat_nframes" for medium baseline
-concat_nframes = 63   # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
-train_ratio = 0.75    # the ratio of data used for training, the rest will be used for validation
+concat_nframes = 55         # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
+train_ratio = 0.75          # the ratio of data used for training, the rest will be used for validation
 
 # training parameters
 seed = 11922189              # random seed
-batch_size = 128             # batch size
+batch_size = 1024            # batch size
 num_epoch = 50               # the number of training epoch
-learning_rate = 1e-4         # learning rate
+learning_rate = 1e-3         # learning rate
+weight_decay = 1e-2          # weight_decay
 dropout = 0.5                # dropout
-model_path = './model_test.ckpt'  # the path where the checkpoint will be saved
+model_path = './model_gru.ckpt'  # the path where the checkpoint will be saved
+pretrained = False
+model_pretrained_path = './model_gru_0.8165.ckpt'
+early_stop = 5
 
 # model parameters
 input_dim = 39 * concat_nframes # the input dim of the model, you should not change the value
-use_encoder = True              # use CNN or not
-use_decoder = True              # use GRU or not
-decoder_layers = 2              # the number of encoder layers
-decoder_dim = 512               # the encoder dim
-classifier_structure = [4096,2048,2048,1024,1024,512]    # the structure of classifier
+encoder_layers = 5              # the number of encoder layers
+encoder_dim = 512               # the encoder dim
+decoder_structure = [4096, 2048, 2048, 1024, 1024, 512]
+
+# ensemble
+do_ensemble = False
+ensemble_model_paths = [
+    './model_gru_0.8165.ckpt',
+    './model_gru_0.82248.ckpt',
+    ]
 
 
 
@@ -159,10 +142,10 @@ def concat_feat(x, concat_n):
     for r_idx in range(1, mid+1):
         x[mid + r_idx, :] = shift(x[mid + r_idx], r_idx)
         x[mid - r_idx, :] = shift(x[mid - r_idx], -r_idx)
-        
+
     return x.permute(1, 0, 2).view(seq_len, concat_n * feature_dim)
 
-def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8):
+def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8, random_seed=1213):
     class_num = 41 # NOTE: pre-computed, should not need change
 
     if split == 'train' or split == 'val':
@@ -180,6 +163,7 @@ def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8
         
         # split training and validation data
         usage_list = open(os.path.join(phone_path, 'train_split.txt')).readlines()
+        random.seed(random_seed)
         random.shuffle(usage_list)
         train_len = int(len(usage_list) * train_ratio)
         usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
@@ -243,9 +227,6 @@ class LibriDataset(Dataset):
 """# Model
 Feel free to modify the structure of the model.
 """
-
-from crnn_resnet import CRNN
-import torchvision.transforms as T
     
 class BasicBlock(nn.Module):
     def __init__(self, input_dim, output_dim, dropout):
@@ -254,7 +235,7 @@ class BasicBlock(nn.Module):
         self.block = nn.Sequential(
             nn.Linear(input_dim, output_dim),
             nn.BatchNorm1d(output_dim),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Dropout(dropout),
         )
 
@@ -267,66 +248,41 @@ class Classifier(nn.Module):
     def __init__(self, 
                  input_dim, 
                  output_dim=41, 
+                 decoder_structure=[256],
+                 encoder_layers=1, 
+                 encoder_dim=256, 
                  dropout=0.5,
-                 classifier_structure=[256], 
-                 use_encoder=False,
-                 use_decoder=False,
-                 decoder_layers=1, 
-                 decoder_dim=256,
                  concat_nframes=1):
         super(Classifier, self).__init__()
         
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.classifier_structure = classifier_structure
-        self.decoder_layers = decoder_layers
-        self.decoder_dim = decoder_dim
+        self.decoder_structure = decoder_structure
+        self.encoder_layers = encoder_layers
+        self.encoder_dim = encoder_dim
         self.dropout = dropout
-        self.use_decoder = use_decoder
         self.concat_nframes = concat_nframes
-        self.use_encoder = use_encoder
-            
-        self.transform = T.Resize((32,63))
-        
-        self.crnn = CRNN(32, 1, 64, 512)
+
+        self.encoder = nn.GRU(
+            input_size=input_dim//concat_nframes, 
+            hidden_size=encoder_dim, 
+            num_layers=encoder_layers, 
+            dropout=dropout, 
+            bidirectional=True,
+            batch_first=True
+        )
         
         self.fc = nn.Sequential(
-            BasicBlock(self.classifier_input_size, classifier_structure[0], dropout),
-            *[BasicBlock(classifier_structure[i], classifier_structure[i+1], dropout) for i in range(len(classifier_structure)-1)],
-            nn.Linear(classifier_structure[-1], output_dim)
+            BasicBlock(self.encoder_dim * self.concat_nframes * 2, decoder_structure[0], dropout),
+            *[BasicBlock(decoder_structure[i], decoder_structure[i+1], dropout) for i in range(len(decoder_structure)-1)],
+            nn.Linear(decoder_structure[-1], output_dim)
         )
-    
-    @property
-    def decoder_input_size(self):
-        if not self.use_encoder:
-            return 39
-        else:
-            return 512
-        
-    @property
-    def classifier_input_size(self):
-        if self.use_encoder:
-            return 1024
-        if not self.use_decoder:
-            return self.input_dim
-        else:
-            return self.decoder_dim * self.concat_nframes * 2
 
     def forward(self, x):
         N, S = x.shape
-        
-        if self.use_encoder or self.use_decoder:
-            x = x.view(N, S//39, 39)
-
-        x = x.permute(0, 2, 1)
-        x = self.transform(x)
-        x = x.unsqueeze(1)
-        x = self.crnn(x)
-        x = x.permute(1, 0, 2)
-
-        # print(x.shape)
-        # x = x.view(N, self.classifier_input_size)
-        x = torch.reshape(x, (N, self.classifier_input_size))
+        x = torch.reshape(x, (N, S//39, 39))
+        x, _ = self.encoder(x)
+        x = torch.reshape(x, (N, self.encoder_dim * self.concat_nframes * 2))
         x = self.fc(x)
         return x
 
@@ -338,8 +294,8 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'DEVICE: {device}')
 
 # preprocess data
-train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio)
-val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio)
+train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
+val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
 
 # get dataset
 train_set = LibriDataset(train_X, train_y)
@@ -353,36 +309,40 @@ gc.collect()
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 
+
 """# Training"""
 
-# create model, define a loss function, and optimizer
-model = Classifier(
-    input_dim, 
-    dropout=dropout,
-    classifier_structure=classifier_structure, 
-    use_encoder=use_encoder,
-    use_decoder=use_decoder,
-    decoder_layers=decoder_layers, 
-    decoder_dim=decoder_dim,
-    concat_nframes=concat_nframes).to(device)
-criterion = nn.CrossEntropyLoss() 
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-
-
-# summary(model, input_size=(input_dim,))
-
-
 if do_train:
-
+    
     writer = SummaryWriter()
+
+    # create model, define a loss function, and optimizer
+    model = Classifier(
+        input_dim=input_dim,
+        decoder_structure=decoder_structure,
+        encoder_layers=encoder_layers,
+        encoder_dim=encoder_dim,
+        dropout=dropout,
+        concat_nframes=concat_nframes).to(device)
+    criterion = nn.CrossEntropyLoss() 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-6)
+    # scheduler = create_lr_scheduler_with_warmup(scheduler, warmup_start_value=0, warmup_end_value=learning_rate, warmup_duration=3)
+
+    torch.save(model.state_dict(), model_path)
+    
+    if pretrained:
+        model.load_state_dict(torch.load(model_pretrained_path))
+
+    summary(model, input_size=(input_dim,))
 
     step = 0
     best_acc = 0.0
+    early_stop_conut = 0
+    stop_training = False
     for epoch in range(num_epoch):
         train_acc = 0.0
-        train_loss = 0.0
         val_acc = 0.0
-        val_loss = 0.0
 
         # training
         model.train() # set the model to training mode
@@ -397,12 +357,12 @@ if do_train:
             loss = criterion(outputs, labels)
             loss.backward() 
             optimizer.step() 
-            
+            scheduler.step()
+
             step += 1
 
             _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
             train_acc += (train_pred.detach() == labels.detach()).sum().item()
-            train_loss += loss.item()
 
         # validation
         if len(val_set) > 0:
@@ -414,32 +374,36 @@ if do_train:
                     labels = labels.to(device)
                     outputs = model(features)
 
-                    loss = criterion(outputs, labels) 
-
                     _, val_pred = torch.max(outputs, 1) 
                     val_acc += (val_pred.cpu() == labels.cpu()).sum().item() # get the index of the class with the highest probability
-                    val_loss += loss.item()
 
-            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} Loss: {train_loss/len(train_loader):3.5f} | Val Acc: {val_acc/len(val_set):3.5f} loss: {val_loss/len(val_loader):3.5f}')
+            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} | Val Acc: {val_acc/len(val_set):3.5f}')
 
             writer.add_scalar('Accuracy/train', train_acc/len(train_set), step)
-            writer.add_scalar('Loss/train', train_loss/len(train_loader), step)
             writer.add_scalar('Accuracy/valid', val_acc/len(val_set), step)
-            writer.add_scalar('Loss/valid', val_loss/len(val_loader), step)
 
             # if the model improves, save a checkpoint at this epoch
             if val_acc > best_acc:
+                early_stop_conut = 0
                 best_acc = val_acc
                 torch.save(model.state_dict(), model_path)
                 print(f'saving model with acc {best_acc/len(val_set):.5f}')
-                
+            else:
+                early_stop_conut += 1
+                if early_stop_conut > early_stop:
+                    stop_training = True
+                    break
+
+
         else:
-            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} Loss: {train_loss/len(train_loader):3.5f}')
+            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f}')
 
             writer.add_scalar('Accuracy/train', train_acc/len(train_set), step)
-            writer.add_scalar('Loss/train', train_loss/len(train_loader), step)
             torch.save(model.state_dict(), model_path)
             print(f'saving model at last epoch: {epoch}')
+
+        if stop_training:
+            break
             
 
     del train_set, val_set
@@ -457,17 +421,30 @@ if do_test:
     test_set = LibriDataset(test_X, None)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-    # load model
-    model = Classifier(
-        input_dim, 
-        dropout=dropout,
-        classifier_structure=classifier_structure, 
-        use_encoder=use_encoder,
-        use_decoder=use_decoder,
-        decoder_layers=decoder_layers, 
-        decoder_dim=decoder_dim,
-        concat_nframes=concat_nframes).to(device)
-    model.load_state_dict(torch.load(model_path))
+    if do_ensemble:
+        models = []
+        for path in ensemble_model_paths:
+            # load model
+            model = Classifier(
+                input_dim=input_dim, 
+                decoder_structure=decoder_structure, 
+                encoder_layers=encoder_layers, 
+                encoder_dim=encoder_dim,
+                dropout=dropout,
+                concat_nframes=concat_nframes).to(device)
+            model.load_state_dict(torch.load(path))
+            models.append(model)
+            
+    else:
+        # load model
+        model = Classifier(
+            input_dim=input_dim, 
+            decoder_structure=decoder_structure, 
+            encoder_layers=encoder_layers, 
+            encoder_dim=encoder_dim,
+            dropout=dropout,
+            concat_nframes=concat_nframes).to(device)
+        model.load_state_dict(torch.load(model_path))
 
     """Make prediction."""
 
@@ -478,8 +455,13 @@ if do_test:
         for i, batch in enumerate(tqdm(test_loader)):
             features = batch
             features = features.to(device)
-
-            outputs = model(features)
+            
+            if do_ensemble:
+                outputs = torch.zeros(features.shape[0], 41).to(device)
+                for model in models:
+                    outputs += model(features)
+            else:
+                outputs = model(features)
 
             _, test_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
             pred = np.concatenate((pred, test_pred.cpu().numpy()), axis=0)

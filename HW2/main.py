@@ -45,36 +45,27 @@ do_train = True
 do_test = False
 
 # data prarameters
-# TODO: change the value of "concat_nframes" for medium baseline
-concat_nframes = 55         # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
-train_ratio = 0.75          # the ratio of data used for training, the rest will be used for validation
+train_ratio = 0.8           # the ratio of data used for training, the rest will be used for validation
 
 # training parameters
 seed = 11922189              # random seed
-batch_size = 1024            # batch size
-num_epoch = 50               # the number of training epoch
-learning_rate = 1e-3         # learning rate
-weight_decay = 1e-2          # weight_decay
-dropout = 0.5                # dropout
-model_path = './model_gru.ckpt'  # the path where the checkpoint will be saved
+batch_size = 8               # batch size
+num_epoch = 100              # the number of training epoch
+learning_rate = 2e-3         # learning rate
+weight_decay = 0.05          # weight_decay
+dropout = 0.4                # dropout
+model_path = './model_lstm_0.8_2e-3_5.ckpt'  # the path where the checkpoint will be saved
 pretrained = False
-model_pretrained_path = './model_gru_0.8165.ckpt'
-early_stop = 5
+model_pretrained_path = './model_lstm_0.8_2e-3_3.ckpt'
+early_stop = 100
 
 # model parameters
-input_dim = 39 * concat_nframes # the input dim of the model, you should not change the value
-encoder_layers = 5              # the number of encoder layers
-encoder_dim = 512               # the encoder dim
-decoder_structure = [4096, 2048, 2048, 1024, 1024, 512]
-
-# ensemble
-do_ensemble = False
-ensemble_model_paths = [
-    './model_gru_0.8165.ckpt',
-    './model_gru_0.82248.ckpt',
-    ]
-
-
+input_dim = 39
+output_dim = 41
+rnn_layers = 7
+rnn_dim = 256
+fc_layers = 0
+fc_dim = 256
 
 """# Some Utility Functions
 **Fixes random number generator seeds for reproducibility.**
@@ -145,7 +136,7 @@ def concat_feat(x, concat_n):
 
     return x.permute(1, 0, 2).view(seq_len, concat_n * feature_dim)
 
-def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8, random_seed=1213):
+def preprocess_data(split, feat_dir, phone_path, train_ratio=0.8, random_seed=1213):
     class_num = 41 # NOTE: pre-computed, should not need change
 
     if split == 'train' or split == 'val':
@@ -165,8 +156,21 @@ def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8
         usage_list = open(os.path.join(phone_path, 'train_split.txt')).readlines()
         random.seed(random_seed)
         random.shuffle(usage_list)
-        train_len = int(len(usage_list) * train_ratio)
-        usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
+        # train_len = int(len(usage_list) * train_ratio)
+        # usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
+        train_len = int(len(usage_list))
+        if split == 'train':
+            # usage_list = usage_list[:int(train_len/5*4)]
+            # usage_list = usage_list[:int(train_len/5*3)] + usage_list[int(train_len/5*4):]
+            # usage_list = usage_list[:int(train_len/5*2)] + usage_list[int(train_len/5*3):]
+            # usage_list = usage_list[:int(train_len/5*1)] + usage_list[int(train_len/5*2):]
+            usage_list = usage_list[int(train_len/5):]
+        else:
+            # usage_list = usage_list[int(train_len/5*4):]
+            # usage_list = usage_list[int(train_len/5*3):int(train_len/5*4)]
+            # usage_list = usage_list[int(train_len/5*2):int(train_len/5*3)]
+            # usage_list = usage_list[int(train_len/5*1):int(train_len/5*2)]
+            usage_list = usage_list[:int(train_len/5)]
 
     elif mode == 'test':
         usage_list = open(os.path.join(phone_path, 'test_split.txt')).readlines()
@@ -174,33 +178,26 @@ def preprocess_data(split, feat_dir, phone_path, concat_nframes, train_ratio=0.8
     usage_list = [line.strip('\n') for line in usage_list]
     print('[Dataset] - # phone classes: ' + str(class_num) + ', number of utterances for ' + split + ': ' + str(len(usage_list)))
 
-    max_len = 3000000
-    X = torch.empty(max_len, 39 * concat_nframes)
+    X = []
     if mode == 'train':
-        y = torch.empty(max_len, dtype=torch.long)
+        y = []
 
     idx = 0
     for i, fname in tqdm(enumerate(usage_list)):
         feat = load_feat(os.path.join(feat_dir, mode, f'{fname}.pt'))
         cur_len = len(feat)
-        feat = concat_feat(feat, concat_nframes)
         if mode == 'train':
             label = torch.LongTensor(label_dict[fname])
+            y.append(label)
 
-        X[idx: idx + cur_len, :] = feat
-        if mode == 'train':
-            y[idx: idx + cur_len] = label
+        X.append(feat)
 
         idx += cur_len
 
-    X = X[:idx, :]
-    if mode == 'train':
-        y = y[:idx]
-
     print(f'[INFO] {split} set')
-    print(X.shape)
+    print(len(X))
     if mode == 'train':
-        print(y.shape)
+        print(len(y))
         return X, y
     else:
         return X
@@ -211,7 +208,7 @@ class LibriDataset(Dataset):
     def __init__(self, X, y=None):
         self.data = X
         if y is not None:
-            self.label = torch.LongTensor(y)
+            self.label = y
         else:
             self.label = None
 
@@ -234,7 +231,6 @@ class BasicBlock(nn.Module):
 
         self.block = nn.Sequential(
             nn.Linear(input_dim, output_dim),
-            nn.BatchNorm1d(output_dim),
             nn.LeakyReLU(),
             nn.Dropout(dropout),
         )
@@ -248,43 +244,55 @@ class Classifier(nn.Module):
     def __init__(self, 
                  input_dim, 
                  output_dim=41, 
-                 decoder_structure=[256],
-                 encoder_layers=1, 
-                 encoder_dim=256, 
-                 dropout=0.5,
-                 concat_nframes=1):
+                 fc_layers=1, 
+                 fc_dim=256, 
+                 rnn_layers=1, 
+                 rnn_dim=256, 
+                 dropout=0.5):
         super(Classifier, self).__init__()
         
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.decoder_structure = decoder_structure
-        self.encoder_layers = encoder_layers
-        self.encoder_dim = encoder_dim
+        self.fc_layers = fc_layers
+        self.fc_dim = fc_dim
+        self.rnn_layers = rnn_layers
+        self.rnn_dim = rnn_dim
         self.dropout = dropout
-        self.concat_nframes = concat_nframes
 
-        self.encoder = nn.GRU(
-            input_size=input_dim//concat_nframes, 
-            hidden_size=encoder_dim, 
-            num_layers=encoder_layers, 
+        # self.encoder = nn.GRU(
+        self.encoder = nn.LSTM(
+            input_size=input_dim, 
+            hidden_size=rnn_dim, 
+            num_layers=rnn_layers, 
             dropout=dropout, 
             bidirectional=True,
             batch_first=True
         )
         
         self.fc = nn.Sequential(
-            BasicBlock(self.encoder_dim * self.concat_nframes * 2, decoder_structure[0], dropout),
-            *[BasicBlock(decoder_structure[i], decoder_structure[i+1], dropout) for i in range(len(decoder_structure)-1)],
-            nn.Linear(decoder_structure[-1], output_dim)
+            BasicBlock(self.rnn_dim * 2, fc_dim, dropout),
+            *[BasicBlock(fc_dim, fc_dim, dropout) for i in range(fc_layers)],
+            nn.Linear(fc_dim, output_dim)
         )
+        
+        self.criterion = nn.CrossEntropyLoss() 
 
-    def forward(self, x):
-        N, S = x.shape
-        x = torch.reshape(x, (N, S//39, 39))
+    def forward(self, x, y=None):
+        x = nn.utils.rnn.pad_sequence(x, batch_first=True)
         x, _ = self.encoder(x)
-        x = torch.reshape(x, (N, self.encoder_dim * self.concat_nframes * 2))
         x = self.fc(x)
-        return x
+        
+        if y is None:
+            return x
+        else:
+            y = nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=-1).reshape(-1)
+
+            mask = y != -1
+            x = x.reshape(-1, self.output_dim)[mask]
+            loss = self.criterion(x, y[mask])
+            
+            return x, loss
+            
 
 
 """# Dataloader"""
@@ -293,117 +301,152 @@ same_seeds(seed)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'DEVICE: {device}')
 
-# preprocess data
-train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
-val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
-
-# get dataset
-train_set = LibriDataset(train_X, train_y)
-val_set = LibriDataset(val_X, val_y)
-
-# remove raw feature to save memory
-del train_X, train_y, val_X, val_y
-gc.collect()
-
-# get dataloader
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
-
 
 """# Training"""
 
 if do_train:
     
+    # preprocess data
+    train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', train_ratio=train_ratio, random_seed=seed)
+    val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', train_ratio=train_ratio, random_seed=seed)
+
+    # get dataset
+    train_set = LibriDataset(train_X, train_y)
+    val_set = LibriDataset(val_X, val_y)
+
+    # remove raw feature to save memory
+    del train_X, train_y, val_X, val_y
+    gc.collect()
+    
+    def train_collate(batch):
+        data = [item[0].to(device) for item in batch]
+        target = [item[1].to(device) for item in batch]
+        return [data, target]
+
+    # get dataloader
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=train_collate)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=train_collate)
+    
+    
     writer = SummaryWriter()
 
-    # create model, define a loss function, and optimizer
-    model = Classifier(
-        input_dim=input_dim,
-        decoder_structure=decoder_structure,
-        encoder_layers=encoder_layers,
-        encoder_dim=encoder_dim,
-        dropout=dropout,
-        concat_nframes=concat_nframes).to(device)
-    criterion = nn.CrossEntropyLoss() 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-6)
-    # scheduler = create_lr_scheduler_with_warmup(scheduler, warmup_start_value=0, warmup_end_value=learning_rate, warmup_duration=3)
+    import optuna
+    def objective(trial):
 
-    torch.save(model.state_dict(), model_path)
-    
-    if pretrained:
-        model.load_state_dict(torch.load(model_pretrained_path))
+        # fc_layers = trial.suggest_categorical('fc_layers', [0, 1, 2, 3])
+        # fc_dim = trial.suggest_categorical('fc_dim', [128, 256, 512])
+        # rnn_layers = trial.suggest_categorical('rnn_layers', [4, 5, 6, 7])
+        # rnn_dim = trial.suggest_categorical('rnn_dim', [256, 512])
+        # dropout = trial.suggest_categorical('dropout', [0.1, 0.2, 0.3, 0.4, 0.5])
+        # learning_rate = trial.suggest_categorical('learning_rate', [5e-3, 2e-3, 1e-3])
+        # weight_decay = trial.suggest_categorical('weight_decay', [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2])
+        # batch_size = trial.suggest_categorical('batch_size', [32, 16, 8, 4])
+        print(f'fc_layers = {fc_layers}')
+        print(f'fc_dim = {fc_dim}')
+        print(f'rnn_layers = {rnn_layers}')
+        print(f'rnn_dim = {rnn_dim}')
+        print(f'dropout = {dropout}')
+        print(f'learning_rate = {learning_rate}')
+        print(f'weight_decay = {weight_decay}')
+        print(f'batch_size = {batch_size}')
+        
 
-    summary(model, input_size=(input_dim,))
+        # create model, define a loss function, and optimizer
+        model = Classifier(input_dim, output_dim, fc_layers, fc_dim, rnn_layers, rnn_dim, dropout).to(device)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        if pretrained:
+            model.load_state_dict(torch.load(model_pretrained_path))
 
-    step = 0
-    best_acc = 0.0
-    early_stop_conut = 0
-    stop_training = False
-    for epoch in range(num_epoch):
-        train_acc = 0.0
-        val_acc = 0.0
+        step = 0
+        best_acc = 0.0
+        early_stop_conut = 0
+        stop_training = False
+        for epoch in range(num_epoch):
+            train_acc = 0.0
+            train_size = 0
+            val_acc = 0.0
+            val_size = 0
 
-        # training
-        model.train() # set the model to training mode
-        for i, batch in enumerate(tqdm(train_loader)):
-            features, labels = batch
-            features = features.to(device)
-            labels = labels.to(device)
+            # training
+            model.train() # set the model to training mode
+            for i, batch in enumerate(tqdm(train_loader)):
+                features, labels = batch
 
-            optimizer.zero_grad() 
-            outputs = model(features) 
+                optimizer.zero_grad() 
+                outputs, loss = model(features, labels)
 
-            loss = criterion(outputs, labels)
-            loss.backward() 
-            optimizer.step() 
-            scheduler.step()
+                loss.backward() 
+                optimizer.step() 
 
-            step += 1
+                step += 1
 
-            _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
-            train_acc += (train_pred.detach() == labels.detach()).sum().item()
+                _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
+                labels = torch.cat([l for l in labels], dim=0)
+                train_acc += (train_pred.detach() == labels.detach()).sum().item()
+                train_size += len(train_pred)
+                
+            train_acc /= train_size
 
-        # validation
-        if len(val_set) > 0:
-            model.eval() # set the model to evaluation mode
-            with torch.no_grad():
-                for i, batch in enumerate(tqdm(val_loader)):
-                    features, labels = batch
-                    features = features.to(device)
-                    labels = labels.to(device)
-                    outputs = model(features)
+            # validation
+            if len(val_set) > 0:
+                model.eval() # set the model to evaluation mode
+                with torch.no_grad():
+                    for i, batch in enumerate(tqdm(val_loader)):
+                        features, labels = batch
+                        outputs, loss = model(features, labels)
 
-                    _, val_pred = torch.max(outputs, 1) 
-                    val_acc += (val_pred.cpu() == labels.cpu()).sum().item() # get the index of the class with the highest probability
+                        _, val_pred = torch.max(outputs, 1) 
+                        labels = torch.cat([l for l in labels], dim=0)
+                        val_acc += (val_pred.cpu() == labels.cpu()).sum().item()
+                        val_size += len(val_pred)
+                        
+                val_acc /= val_size
 
-            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} | Val Acc: {val_acc/len(val_set):3.5f}')
+                print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc:3.5f} | Val Acc: {val_acc:3.5f}')
 
-            writer.add_scalar('Accuracy/train', train_acc/len(train_set), step)
-            writer.add_scalar('Accuracy/valid', val_acc/len(val_set), step)
+                writer.add_scalar('Accuracy/train', train_acc, step)
+                writer.add_scalar('Accuracy/valid', val_acc, step)
 
-            # if the model improves, save a checkpoint at this epoch
-            if val_acc > best_acc:
-                early_stop_conut = 0
-                best_acc = val_acc
-                torch.save(model.state_dict(), model_path)
-                print(f'saving model with acc {best_acc/len(val_set):.5f}')
+                # if the model improves, save a checkpoint at this epoch
+                if val_acc > best_acc:
+                    early_stop_conut = 0
+                    best_acc = val_acc
+                    torch.save(model.state_dict(), model_path)
+                    print(f'saving model with acc {best_acc:.5f}')
+                else:
+                    early_stop_conut += 1
+                    if early_stop_conut > early_stop:
+                        stop_training = True
+                        break
+
+
             else:
-                early_stop_conut += 1
-                if early_stop_conut > early_stop:
-                    stop_training = True
-                    break
+                print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc:3.5f}')
 
+                writer.add_scalar('Accuracy/train', train_acc, step)
+                torch.save(model.state_dict(), model_path)
+                print(f'saving model at last epoch: {epoch}')
 
-        else:
-            print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f}')
+            if stop_training:
+                break
+            
 
-            writer.add_scalar('Accuracy/train', train_acc/len(train_set), step)
-            torch.save(model.state_dict(), model_path)
-            print(f'saving model at last epoch: {epoch}')
+        return best_acc
+    
 
-        if stop_training:
-            break
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=1)
+    print('Number of finished trials:', len(study.trials))
+    print('Best trial parameters:', study.best_trial.params)
+    print('Best score:', study.best_value)
+#     from optuna.visualization import plot_optimization_history
+#     plotly_config = {"staticPlot": True}
+#     fig = plot_optimization_history(study)
+#     fig.show(config=plotly_config)
+#     from optuna.visualization import plot_param_importances
+
+#     fig = plot_param_importances(study)
+#     fig.show(config=plotly_config)
             
 
     del train_set, val_set
@@ -416,55 +459,33 @@ Create a testing dataset, and load model from the saved checkpoint.
 
 if do_test:
     
+    def test_collate(batch):
+        data = [item.to(device) for item in batch]
+        return data
+    
     # load data
-    test_X = preprocess_data(split='test', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes)
+    test_X = preprocess_data(split='test', feat_dir='./libriphone/feat', phone_path='./libriphone')
     test_set = LibriDataset(test_X, None)
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
-
-    if do_ensemble:
-        models = []
-        for path in ensemble_model_paths:
-            # load model
-            model = Classifier(
-                input_dim=input_dim, 
-                decoder_structure=decoder_structure, 
-                encoder_layers=encoder_layers, 
-                encoder_dim=encoder_dim,
-                dropout=dropout,
-                concat_nframes=concat_nframes).to(device)
-            model.load_state_dict(torch.load(path))
-            models.append(model)
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=test_collate)
             
-    else:
-        # load model
-        model = Classifier(
-            input_dim=input_dim, 
-            decoder_structure=decoder_structure, 
-            encoder_layers=encoder_layers, 
-            encoder_dim=encoder_dim,
-            dropout=dropout,
-            concat_nframes=concat_nframes).to(device)
-        model.load_state_dict(torch.load(model_path))
+    # load model
+    model = Classifier(input_dim, output_dim, fc_layers, fc_dim, rnn_layers, rnn_dim, dropout).to(device)
+    model.load_state_dict(torch.load(model_path))
 
     """Make prediction."""
 
-    pred = np.array([], dtype=np.int32)
+    pred = []
 
     model.eval()
     with torch.no_grad():
         for i, batch in enumerate(tqdm(test_loader)):
             features = batch
-            features = features.to(device)
-            
-            if do_ensemble:
-                outputs = torch.zeros(features.shape[0], 41).to(device)
-                for model in models:
-                    outputs += model(features)
-            else:
-                outputs = model(features)
+            outputs = model(features)
 
-            _, test_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
-            pred = np.concatenate((pred, test_pred.cpu().numpy()), axis=0)
+            _, test_pred = torch.max(outputs, -1) # get the index of the class with the highest probability
+            for p, f in zip(test_pred, features):
+                p = p[:len(f)]
+                pred.extend(p.detach().cpu().tolist())
 
     """Write prediction to a CSV file.
 

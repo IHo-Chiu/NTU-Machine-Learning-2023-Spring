@@ -4,8 +4,8 @@ public: 0.865
 
 ## Step 1. Choose model
 
-RNN, LSTM, GRU
-LSTM is better
+Tried RNN, LSTM, GRU.
+LSTM is better.
 
 ## Step2. Tune model parameters
 

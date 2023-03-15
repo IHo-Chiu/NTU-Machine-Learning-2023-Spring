@@ -41,22 +41,22 @@ after running the following block.
 
 """# Hyper-parameters"""
 
-do_train = True
-do_test = False
+do_train = False
+do_test = True
 
 # data prarameters
-train_ratio = 0.8           # the ratio of data used for training, the rest will be used for validation
+train_ratio = 1           # the ratio of data used for training, the rest will be used for validation
 
 # training parameters
 seed = 11922189              # random seed
 batch_size = 8               # batch size
-num_epoch = 100              # the number of training epoch
-learning_rate = 2e-3         # learning rate
+num_epoch = 30              # the number of training epoch
+learning_rate = 2e-4         # learning rate
 weight_decay = 0.05          # weight_decay
 dropout = 0.4                # dropout
-model_path = './model_lstm_0.8_2e-3_5.ckpt'  # the path where the checkpoint will be saved
+model_path = './model_lstm_1_2e-4_1.ckpt'  # the path where the checkpoint will be saved
 pretrained = False
-model_pretrained_path = './model_lstm_0.8_2e-3_3.ckpt'
+model_pretrained_path = './model_lstm_1_2e-3_1.ckpt'
 early_stop = 100
 
 # model parameters
@@ -156,21 +156,21 @@ def preprocess_data(split, feat_dir, phone_path, train_ratio=0.8, random_seed=12
         usage_list = open(os.path.join(phone_path, 'train_split.txt')).readlines()
         random.seed(random_seed)
         random.shuffle(usage_list)
-        # train_len = int(len(usage_list) * train_ratio)
-        # usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
-        train_len = int(len(usage_list))
-        if split == 'train':
-            # usage_list = usage_list[:int(train_len/5*4)]
-            # usage_list = usage_list[:int(train_len/5*3)] + usage_list[int(train_len/5*4):]
-            # usage_list = usage_list[:int(train_len/5*2)] + usage_list[int(train_len/5*3):]
-            # usage_list = usage_list[:int(train_len/5*1)] + usage_list[int(train_len/5*2):]
-            usage_list = usage_list[int(train_len/5):]
-        else:
-            # usage_list = usage_list[int(train_len/5*4):]
-            # usage_list = usage_list[int(train_len/5*3):int(train_len/5*4)]
-            # usage_list = usage_list[int(train_len/5*2):int(train_len/5*3)]
-            # usage_list = usage_list[int(train_len/5*1):int(train_len/5*2)]
-            usage_list = usage_list[:int(train_len/5)]
+        train_len = int(len(usage_list) * train_ratio)
+        usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
+        # train_len = int(len(usage_list))
+        # if split == 'train':
+        #     # usage_list = usage_list[:int(train_len/5*4)]
+        #     # usage_list = usage_list[:int(train_len/5*3)] + usage_list[int(train_len/5*4):]
+        #     # usage_list = usage_list[:int(train_len/5*2)] + usage_list[int(train_len/5*3):]
+        #     # usage_list = usage_list[:int(train_len/5*1)] + usage_list[int(train_len/5*2):]
+        #     usage_list = usage_list[int(train_len/5):]
+        # else:
+        #     # usage_list = usage_list[int(train_len/5*4):]
+        #     # usage_list = usage_list[int(train_len/5*3):int(train_len/5*4)]
+        #     # usage_list = usage_list[int(train_len/5*2):int(train_len/5*3)]
+        #     # usage_list = usage_list[int(train_len/5*1):int(train_len/5*2)]
+        #     usage_list = usage_list[:int(train_len/5)]
 
     elif mode == 'test':
         usage_list = open(os.path.join(phone_path, 'test_split.txt')).readlines()

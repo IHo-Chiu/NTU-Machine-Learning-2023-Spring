@@ -5,6 +5,7 @@ public: 0.90733
 ## Model
 
 Tried Resnet18, Resnet34, Resnet50
+
 Choose Resnet50
 
 efficientnet_v2_s or efficientnet_v2_m may be better
@@ -15,16 +16,22 @@ Ref:
 https://zhuanlan.zhihu.com/p/430563265
 
 RandomResizedCrop
+
 RandomHorizontalFlip
+
 TrivialAugmentWide
+
 Normalize
+
 RandomErasing
 
 ## Mix
 
 Ref: 
 https://www.kaggle.com/code/ar2017/pytorch-efficientnet-train-aug-cutmix-fmix
+
 https://github.com/ecs-vlc/FMix/blob/master/fmix.py
+
 https://github.com/CoinCheung/pytorch-loss/blob/master/focal_loss.py
 
 cutmix + fmix + focal loss
@@ -40,7 +47,9 @@ choose SGD
 ## Finetune
 
 1st round: lr = 0.1   -> valid acc: 0.8
+
 2st round: lr = 0.01  -> valid acc: 0.89
+
 3st round: lr = 0.001 -> valid acc: 0.9
 
 ## Train Time Augmentation

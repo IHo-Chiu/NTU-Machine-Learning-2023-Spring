@@ -7,5 +7,5 @@
 | # | Homework | Public Score | Private Score | Ranking |
 | - | -------- | ------------ | ------------- | ------- |
 | 1 | Regression | 0.80189 (boss) | 0.8538 (strong) | Top 49% (479/944) |
-| 2 | Classification | 0.87034 (boss) | | |
-| 2 | CNN | 0.90733 (boss) | | |
+| 2 | Classification | 0.87034 (boss) | | Top 1% (1/) |
+| 2 | CNN | 0.92066 (boss) | | Top 1% (2/) |

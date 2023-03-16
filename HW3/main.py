@@ -73,9 +73,9 @@ num_workers = 8
 model_name = 'resnet50'
 cross_valid_num = 4
 pretrained = False
-pretrained_model = f'{model_name}_{cross_valid_num}_0.01_round2.ckpt'
-save_model = f'{model_name}_{cross_valid_num}_{lr}_round2.ckpt'
-test_model = f'resnet50_3_0.001_round2.ckpt'
+pretrained_model = f'{model_name}_{cross_valid_num}_0.001_round2.ckpt'
+save_model = f'{model_name}_{cross_valid_num}_{lr}_round3.ckpt'
+test_model = f'resnet50_5_0.001_round2.ckpt'
 TTA_count = 5
 tfm_weight = 0.5 / TTA_count
 WEIGHTS = torch.tensor([0.5] + [tfm_weight] * TTA_count).to('cuda')
@@ -178,9 +178,10 @@ class Classifier(nn.Module):
             'resnet18': models.resnet18,
             'resnet50': models.resnet50,
             'efficientnet_v2_s': models.efficientnet_v2_s,
+            'efficientnet_v2_m': models.efficientnet_v2_m,
         }
         
-        self.cnn = model_zoo[model_name](weights=False)
+        self.cnn = model_zoo[model_name](weights=None)
         self.fc = nn.Sequential(
             nn.Linear(1000, 512),
             nn.ReLU(),

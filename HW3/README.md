@@ -1,6 +1,6 @@
 # Approach
 
-public: 0.90733
+public: 0.92066
 
 ## Model
 

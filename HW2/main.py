@@ -45,12 +45,12 @@ do_train = False
 do_test = True
 
 # data prarameters
-train_ratio = 1           # the ratio of data used for training, the rest will be used for validation
+train_ratio = 0.8           # the ratio of data used for training, the rest will be used for validation
 
 # training parameters
 seed = 11922189              # random seed
 batch_size = 8               # batch size
-num_epoch = 30              # the number of training epoch
+num_epoch = 30               # the number of training epoch
 learning_rate = 2e-4         # learning rate
 weight_decay = 0.05          # weight_decay
 dropout = 0.4                # dropout
@@ -156,21 +156,21 @@ def preprocess_data(split, feat_dir, phone_path, train_ratio=0.8, random_seed=12
         usage_list = open(os.path.join(phone_path, 'train_split.txt')).readlines()
         random.seed(random_seed)
         random.shuffle(usage_list)
-        train_len = int(len(usage_list) * train_ratio)
-        usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
-        # train_len = int(len(usage_list))
-        # if split == 'train':
-        #     # usage_list = usage_list[:int(train_len/5*4)]
-        #     # usage_list = usage_list[:int(train_len/5*3)] + usage_list[int(train_len/5*4):]
-        #     # usage_list = usage_list[:int(train_len/5*2)] + usage_list[int(train_len/5*3):]
-        #     # usage_list = usage_list[:int(train_len/5*1)] + usage_list[int(train_len/5*2):]
-        #     usage_list = usage_list[int(train_len/5):]
-        # else:
-        #     # usage_list = usage_list[int(train_len/5*4):]
-        #     # usage_list = usage_list[int(train_len/5*3):int(train_len/5*4)]
-        #     # usage_list = usage_list[int(train_len/5*2):int(train_len/5*3)]
-        #     # usage_list = usage_list[int(train_len/5*1):int(train_len/5*2)]
-        #     usage_list = usage_list[:int(train_len/5)]
+        # train_len = int(len(usage_list) * train_ratio)
+        # usage_list = usage_list[:train_len] if split == 'train' else usage_list[train_len:]
+        train_len = int(len(usage_list))
+        if split == 'train':
+            # usage_list = usage_list[:int(train_len/5*4)]
+            # usage_list = usage_list[:int(train_len/5*3)] + usage_list[int(train_len/5*4):]
+            # usage_list = usage_list[:int(train_len/5*2)] + usage_list[int(train_len/5*3):]
+            # usage_list = usage_list[:int(train_len/5*1)] + usage_list[int(train_len/5*2):]
+            usage_list = usage_list[int(train_len/5):]
+        else:
+            # usage_list = usage_list[int(train_len/5*4):]
+            # usage_list = usage_list[int(train_len/5*3):int(train_len/5*4)]
+            # usage_list = usage_list[int(train_len/5*2):int(train_len/5*3)]
+            # usage_list = usage_list[int(train_len/5*1):int(train_len/5*2)]
+            usage_list = usage_list[:int(train_len/5)]
 
     elif mode == 'test':
         usage_list = open(os.path.join(phone_path, 'test_split.txt')).readlines()
@@ -277,6 +277,7 @@ class Classifier(nn.Module):
         
         self.criterion = nn.CrossEntropyLoss() 
 
+    # https://github.com/aqweteddy/NTU-MachineLearning-2022/blob/main/hw2/boss_baseline.ipynb
     def forward(self, x, y=None):
         x = nn.utils.rnn.pad_sequence(x, batch_first=True)
         x, _ = self.encoder(x)
@@ -439,15 +440,6 @@ if do_train:
     print('Number of finished trials:', len(study.trials))
     print('Best trial parameters:', study.best_trial.params)
     print('Best score:', study.best_value)
-#     from optuna.visualization import plot_optimization_history
-#     plotly_config = {"staticPlot": True}
-#     fig = plot_optimization_history(study)
-#     fig.show(config=plotly_config)
-#     from optuna.visualization import plot_param_importances
-
-#     fig = plot_param_importances(study)
-#     fig.show(config=plotly_config)
-            
 
     del train_set, val_set
     del train_loader, val_loader

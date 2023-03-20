@@ -1,3 +1,28 @@
+# Train
+
+```
+# set hyperparameters in line 65~82
+# set do_train = True
+# set save_model = model path
+# set pretrained = True when finetuning
+# set pretrained_model = pretrained model path when finetuning
+# set cross_valid_num = 1,2,3,4,5 with 5-fold cross validation
+# run
+python main.py
+```
+
+# Test
+```
+# set do_train = False
+# set do_test = True
+# set test_model = model path
+# run
+python main.py
+
+# voting
+python voting --csv 1.csv 2.csv 3.csv ...etc
+```
+
 # Approach
 
 public: 0.92866

@@ -69,6 +69,4 @@ public: 0.86
 
 # Reference
 
-Classifier model forward part: https://github.com/aqweteddy/NTU-MachineLearning-2022/blob/main/hw2/boss_baseline.ipynb
-
 optuna: https://optuna.org/

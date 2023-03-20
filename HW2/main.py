@@ -41,7 +41,7 @@ after running the following block.
 
 """# Hyper-parameters"""
 
-do_train = False
+do_train = True
 do_test = True
 
 # data prarameters
@@ -54,7 +54,7 @@ num_epoch = 30               # the number of training epoch
 learning_rate = 2e-4         # learning rate
 weight_decay = 0.05          # weight_decay
 dropout = 0.4                # dropout
-model_path = './model_lstm_1_2e-4_1.ckpt'  # the path where the checkpoint will be saved
+model_path = './model_lstm_1_2e-4_1_test.ckpt'  # the path where the checkpoint will be saved
 pretrained = False
 model_pretrained_path = './model_lstm_1_2e-3_1.ckpt'
 early_stop = 100
@@ -274,25 +274,12 @@ class Classifier(nn.Module):
             *[BasicBlock(fc_dim, fc_dim, dropout) for i in range(fc_layers)],
             nn.Linear(fc_dim, output_dim)
         )
-        
-        self.criterion = nn.CrossEntropyLoss() 
 
-    # https://github.com/aqweteddy/NTU-MachineLearning-2022/blob/main/hw2/boss_baseline.ipynb
-    def forward(self, x, y=None):
+    def forward(self, x):
         x = nn.utils.rnn.pad_sequence(x, batch_first=True)
         x, _ = self.encoder(x)
         x = self.fc(x)
-        
-        if y is None:
-            return x
-        else:
-            y = nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=-1).reshape(-1)
-
-            mask = y != -1
-            x = x.reshape(-1, self.output_dim)[mask]
-            loss = self.criterion(x, y[mask])
-            
-            return x, loss
+        return x
             
 
 
@@ -354,6 +341,7 @@ if do_train:
 
         # create model, define a loss function, and optimizer
         model = Classifier(input_dim, output_dim, fc_layers, fc_dim, rnn_layers, rnn_dim, dropout).to(device)
+        criterion = nn.CrossEntropyLoss() 
         optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         if pretrained:
             model.load_state_dict(torch.load(model_pretrained_path))
@@ -374,7 +362,10 @@ if do_train:
                 features, labels = batch
 
                 optimizer.zero_grad() 
-                outputs, loss = model(features, labels)
+                outputs = model(features)
+                outputs = outputs.view(outputs.shape[0]*outputs.shape[1], -1)
+                labels = nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100).reshape(-1)
+                loss = criterion(outputs, labels)
 
                 loss.backward() 
                 optimizer.step() 
@@ -382,9 +373,8 @@ if do_train:
                 step += 1
 
                 _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
-                labels = torch.cat([l for l in labels], dim=0)
                 train_acc += (train_pred.detach() == labels.detach()).sum().item()
-                train_size += len(train_pred)
+                train_size += (-100 != labels.detach()).sum().item()
                 
             train_acc /= train_size
 
@@ -394,12 +384,13 @@ if do_train:
                 with torch.no_grad():
                     for i, batch in enumerate(tqdm(val_loader)):
                         features, labels = batch
-                        outputs, loss = model(features, labels)
+                        outputs = model(features)
+                        outputs = outputs.view(outputs.shape[0]*outputs.shape[1], -1)
+                        labels = nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100).reshape(-1)
 
                         _, val_pred = torch.max(outputs, 1) 
-                        labels = torch.cat([l for l in labels], dim=0)
                         val_acc += (val_pred.cpu() == labels.cpu()).sum().item()
-                        val_size += len(val_pred)
+                        val_size += (-100 != labels.detach()).sum().item()
                         
                 val_acc /= val_size
 

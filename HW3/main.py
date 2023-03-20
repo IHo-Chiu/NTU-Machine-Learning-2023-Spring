@@ -523,18 +523,47 @@ if do_test:
 
 # print(model)
 
-# # Load the vaildation set defined by TA
-# valid_set = FoodDataset("./valid", train_tfm=test_tfm)
+# # Construct train and valid datasets.
+# # The argument "loader" tells how torchvision reads the data.
+# path = "./train"
+# train_data_paths = [os.path.join(path,x) for x in os.listdir(path) if x.endswith(".jpg")]
+# path = "./valid"
+# valid_data_paths = [os.path.join(path,x) for x in os.listdir(path) if x.endswith(".jpg")]
+
+# train_data_paths = train_data_paths + valid_data_paths
+# random.seed(myseed)
+# random.shuffle(train_data_paths)
+# total_len = len(train_data_paths)
+
+# if cross_valid_num ==1:
+#     train_files = train_data_paths[:int(total_len/5*4)]
+#     valid_files = train_data_paths[int(total_len/5*4):]
+# elif cross_valid_num == 2:
+#     train_files = train_data_paths[:int(total_len/5*3)] + train_data_paths[int(total_len/5*4):]
+#     valid_files = train_data_paths[int(total_len/5*3):int(total_len/5*4)]
+# elif cross_valid_num == 3:
+#     train_files = train_data_paths[:int(total_len/5*2)] + train_data_paths[int(total_len/5*3):]
+#     valid_files = train_data_paths[int(total_len/5*2):int(total_len/5*3)]
+# elif cross_valid_num == 4:
+#     train_files = train_data_paths[:int(total_len/5*1)] + train_data_paths[int(total_len/5*2):]
+#     valid_files = train_data_paths[int(total_len/5*1):int(total_len/5*2)]
+# else:
+#     train_files = train_data_paths[int(total_len/5*1):]
+#     valid_files = train_data_paths[:int(total_len/5*1)]
+
+# print(f'train len = {len(train_files)}')
+# print(f'valid len = {len(valid_files)}')    
+
+# valid_set = FoodDataset("./valid", train_tfm=test_tfm, files=valid_files)
 # valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
+
 # # Extract the representations for the specific layer of model
-# # index = ... # You should find out the index of layer which is defined as "top" or 'mid' layer of your model.
 # features = []
 # labels = []
 # for batch in tqdm(valid_loader):
 #     imgs, lbls = batch
 #     with torch.no_grad():
-#         # logits = model.cnn[:index](imgs.to(device))
 #         x = imgs.to(device)
 #         x = model.cnn.conv1(x)
 #         x = model.cnn.bn1(x)
@@ -542,8 +571,8 @@ if do_test:
 #         x = model.cnn.maxpool(x)
 #         x = model.cnn.layer1(x)
 #         x = model.cnn.layer2(x)
-#         x = model.cnn.layer3(x) # remove this line to get mid layer
-#         x = model.cnn.layer4(x) # remove this line to get mid layer
+#         # x = model.cnn.layer3(x) # remove this line to get mid layer
+#         # x = model.cnn.layer4(x) # remove this line to get mid layer
 #         logits = x
 #         logits = logits.view(logits.size()[0], -1)
 #     lbls = lbls.to(device).argmax(dim=-1)
@@ -565,4 +594,4 @@ if do_test:
 #     plt.scatter(x, y, label=label, s=5)
 # plt.legend()
 # # plt.show()
-# plt.savefig('tsne_top_layer.png')
+# plt.savefig('tsne_mid_layer.png')

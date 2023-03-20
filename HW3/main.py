@@ -63,7 +63,7 @@ if torch.cuda.is_available():
     
     
 # hyperparameters
-do_train = True
+do_train = False
 do_test = False
 batch_size = 32
 n_epochs = 1000
@@ -75,7 +75,7 @@ cross_valid_num = 1
 pretrained = False
 pretrained_model = f'{model_name}_{cross_valid_num}_0.1_test.ckpt'
 save_model = f'{model_name}_{cross_valid_num}_{lr}_test.ckpt'
-test_model = f'resnet50_2_0.001_round3.ckpt'
+test_model = f'resnet50_1_0.001_round3.ckpt'
 TTA_count = 5
 tfm_weight = 0.6 / TTA_count
 WEIGHTS = torch.tensor([0.4] + [tfm_weight] * TTA_count).to('cuda')
@@ -486,13 +486,13 @@ if do_test:
     df["Category"] = prediction
     df.to_csv("submission.csv",index = False)
 
-# """# Q1. Augmentation Implementation
-# ## Implement augmentation by finishing train_tfm in the code with image size of your choice. 
-# ## Directly copy the following block and paste it on GradeScope after you finish the code
-# ### Your train_tfm must be capable of producing 5+ different results when given an identical image multiple times.
-# ### Your  train_tfm in the report can be different from train_tfm in your training code.
+"""# Q1. Augmentation Implementation
+## Implement augmentation by finishing train_tfm in the code with image size of your choice. 
+## Directly copy the following block and paste it on GradeScope after you finish the code
+### Your train_tfm must be capable of producing 5+ different results when given an identical image multiple times.
+### Your  train_tfm in the report can be different from train_tfm in your training code.
 
-# """
+"""
 
 # train_tfm = transforms.Compose([
 #     # Resize the image into a fixed shape (height = width = 128)
@@ -517,26 +517,36 @@ if do_test:
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # # Load the trained model
-# model = Classifier().to(device)
-# state_dict = torch.load(f"{_exp_name}_best.ckpt")
-# model.load_state_dict(state_dict)
+# model = Classifier(model_name).to(device)
+# model.load_state_dict(torch.load(test_model)['model_state_dict'])
 # model.eval()
 
 # print(model)
 
 # # Load the vaildation set defined by TA
-# valid_set = FoodDataset("./valid", tfm=test_tfm)
-# valid_loader = DataLoader(valid_set, batch_size=64, shuffle=False, num_workers=0, pin_memory=True)
+# valid_set = FoodDataset("./valid", train_tfm=test_tfm)
+# valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
 # # Extract the representations for the specific layer of model
-# index = ... # You should find out the index of layer which is defined as "top" or 'mid' layer of your model.
+# # index = ... # You should find out the index of layer which is defined as "top" or 'mid' layer of your model.
 # features = []
 # labels = []
 # for batch in tqdm(valid_loader):
 #     imgs, lbls = batch
 #     with torch.no_grad():
-#         logits = model.cnn[:index](imgs.to(device))
+#         # logits = model.cnn[:index](imgs.to(device))
+#         x = imgs.to(device)
+#         x = model.cnn.conv1(x)
+#         x = model.cnn.bn1(x)
+#         x = model.cnn.relu(x)
+#         x = model.cnn.maxpool(x)
+#         x = model.cnn.layer1(x)
+#         x = model.cnn.layer2(x)
+#         x = model.cnn.layer3(x) # remove this line to get mid layer
+#         x = model.cnn.layer4(x) # remove this line to get mid layer
+#         logits = x
 #         logits = logits.view(logits.size()[0], -1)
+#     lbls = lbls.to(device).argmax(dim=-1)
 #     labels.extend(lbls.cpu().numpy())
 #     logits = np.squeeze(logits.cpu().numpy())
 #     features.extend(logits)
@@ -550,6 +560,9 @@ if do_test:
 # # Plot the t-SNE visualization
 # plt.figure(figsize=(10, 8))
 # for label in np.unique(labels):
-#     plt.scatter(features_tsne[labels == label, 0], features_tsne[labels == label, 1], label=label, s=5)
+#     x = features_tsne[labels == label, 0]
+#     y = features_tsne[labels == label, 1]
+#     plt.scatter(x, y, label=label, s=5)
 # plt.legend()
-# plt.show()
+# # plt.show()
+# plt.savefig('tsne_top_layer.png')

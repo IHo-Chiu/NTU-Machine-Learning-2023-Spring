@@ -64,21 +64,21 @@ if torch.cuda.is_available():
     
 # hyperparameters
 do_train = True
-do_test = True
-batch_size =32
+do_test = False
+batch_size = 32
 n_epochs = 1000
-patience = 100
+patience = 1000
 lr = 1e-1
-num_workers = 8
+num_workers = 4
 model_name = 'resnet50'
-cross_valid_num = 4
+cross_valid_num = 1
 pretrained = False
-pretrained_model = f'{model_name}_{cross_valid_num}_0.001_round2.ckpt'
-save_model = f'{model_name}_{cross_valid_num}_{lr}_round3.ckpt'
-test_model = f'resnet50_5_0.001_round2.ckpt'
+pretrained_model = f'{model_name}_{cross_valid_num}_0.1_test.ckpt'
+save_model = f'{model_name}_{cross_valid_num}_{lr}_test.ckpt'
+test_model = f'resnet50_2_0.001_round3.ckpt'
 TTA_count = 5
-tfm_weight = 0.5 / TTA_count
-WEIGHTS = torch.tensor([0.5] + [tfm_weight] * TTA_count).to('cuda')
+tfm_weight = 0.6 / TTA_count
+WEIGHTS = torch.tensor([0.4] + [tfm_weight] * TTA_count).to('cuda')
 image_size = 224
 
 
@@ -150,13 +150,10 @@ class FoodDataset(Dataset):
         fname = self.files[idx]
         im = Image.open(fname)
         if self.test_tfm:
-            if TTA_count > 1:
-                im_list = [self.test_tfm(im)]
-                for i in range(TTA_count):
-                    im_list.append(self.train_tfm(im))
-                im = torch.stack(im_list)
-            else:
-                im = self.test_tfm(im)
+            im_list = [self.test_tfm(im)]
+            for i in range(TTA_count):
+                im_list.append(self.train_tfm(im))
+            im = torch.stack(im_list)
         elif self.train_tfm:
             im = self.train_tfm(im)
         
@@ -176,9 +173,7 @@ class Classifier(nn.Module):
         
         model_zoo = {
             'resnet18': models.resnet18,
-            'resnet50': models.resnet50,
-            'efficientnet_v2_s': models.efficientnet_v2_s,
-            'efficientnet_v2_m': models.efficientnet_v2_m,
+            'resnet50': models.resnet50
         }
         
         self.cnn = model_zoo[model_name](weights=None)

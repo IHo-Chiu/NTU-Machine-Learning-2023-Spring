@@ -1,6 +1,6 @@
 # Approach
 
-public: 0.92066
+public: 0.92866
 
 ## Model
 
@@ -8,12 +8,9 @@ Tried Resnet18, Resnet34, Resnet50
 
 Choose Resnet50
 
-efficientnet_v2_s or efficientnet_v2_m may be better
-
 ## Data Augmentation
 
-Ref: 
-https://zhuanlan.zhihu.com/p/430563265
+Ref: https://zhuanlan.zhihu.com/p/430563265
 
 RandomResizedCrop
 
@@ -38,9 +35,7 @@ cutmix + fmix + focal loss
 
 ## SGD v.s. Adam
 
-Ref: 
-
-https://opt-ml.org/papers/2021/paper53.pdf
+Ref: https://opt-ml.org/papers/2021/paper53.pdf
 
 choose SGD
 
@@ -50,11 +45,11 @@ choose SGD
 
 2st round: lr = 0.01  -> valid acc: 0.89
 
-3st round: lr = 0.001 -> valid acc: 0.9
+3st round: lr = 0.001 -> valid acc: 0.91
 
 ## Train Time Augmentation
 
-final = test*0.5 + (train*0.1) * 5
+final = test*0.4 + (train*0.12) * 5
 
 ## Five Fold Cross Validation Ensemble
 

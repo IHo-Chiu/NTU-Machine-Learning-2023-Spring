@@ -59,7 +59,6 @@ import torch.nn.functional as F
 from torchaudio.models import Conformer
 from torch.utils.tensorboard import SummaryWriter
 import datetime
-from AMSloss import AdMSoftmaxLoss
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -78,20 +77,18 @@ def parse_args():
     config = {
         "data_dir": "./Dataset",
         "save_path": "conformer.ckpt",
-        # "save_path": "conformer_d_model=280_num_heads=1_ffn_dim=512_num_layers=6_dropout=0.1_conv=3_2023-03-24 23:01:08.126548.ckpt",
-        "pretrained_path": "conformer_256_1.ckpt",
-        "do_pretrained": False,
+        "test_path": "conformer_d_model=200_num_heads=1_ffn_dim=256_num_layers=5_dropout=0.1_conv=3_2023-04-07 11:13:07.393564.ckpt",
         "batch_size": 128,
         "n_workers": 8,
         "valid_steps": 500,
         "warmup_steps": 1000,
         "save_steps": 500,
-        "total_steps": 200000,
+        "total_steps": 100000,
         "do_train": True,
         "do_test": False,
         "output_path": "./output.csv",
         "segment_len": 128,
-        "d_model": 280,
+        "d_model": 200,
         "num_heads": 1,
         "ffn_dim": 512,
         "num_layers": 6,
@@ -290,10 +287,13 @@ class Classifier(nn.Module):
             dropout=dropout,
         )
 
+        # self.selfAttentionPooling = SelfAttentionPooling()
         self.selfAttentionPooling = SelfAttentionPooling(input_dim=d_model)
         
         # Project the the dimension of features from d_model into speaker nums.
-        self.fc = nn.Linear(d_model, n_spks, bias=False)
+        self.pred_layer = nn.Sequential(
+            nn.Linear(d_model, n_spks),
+        )
         
         self.dropout = dropout
 
@@ -313,15 +313,12 @@ class Classifier(nn.Module):
         out, _ = self.encoder_layer(out, torch.tensor([out.shape[1]] * out.shape[0]).to(out.device))
         # out: (batch size, length, d_model)
         out = out.transpose(0, 1)
-#         # mean pooling
-#         stats = out.mean(dim=1)
+        # mean pooling
+        # stats = out.mean(dim=1)
         stats = self.selfAttentionPooling(out)
 
         # out: (batch, n_spks)
-        for W in self.fc.parameters():
-            W = F.normalize(W, dim=1)
-        stats = F.normalize(stats, dim=1)
-        out = self.fc(stats)
+        out = self.pred_layer(stats)
         return out
 
 """# Learning rate schedule
@@ -464,8 +461,7 @@ def inference_collate_batch(batch):
 def main(
     data_dir,
     save_path,
-    pretrained_path,
-    do_pretrained,
+    test_path,
     batch_size,
     n_workers,
     valid_steps,
@@ -491,8 +487,8 @@ def main(
 
             # d_model = trial.suggest_categorical('d_model', [260, 280, 300])
             # num_heads = trial.suggest_categorical('num_heads', [1, 2, 4])
-            # ffn_dim = trial.suggest_categorical('ffn_dim', [384, 512])
-            # num_layers = trial.suggest_categorical('num_layers', [3, 4, 5, 6, 7, 8, 9])
+            # ffn_dim = trial.suggest_categorical('ffn_dim', [256, 384, 512])
+            # num_layers = trial.suggest_categorical('num_layers', [5, 6, 7])
             # dropout = trial.suggest_categorical('dropout', [0.1, 0.2, 0.3, 0.4, 0.5])
             # depthwise_conv_kernel_size = trial.suggest_categorical('depthwise_conv_kernel_size', [3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31])
             print(f'd_model = {d_model}')
@@ -512,15 +508,9 @@ def main(
 
             model = Classifier(d_model=d_model, num_heads=num_heads, ffn_dim=ffn_dim, num_layers=num_layers, 
                                dropout=dropout, depthwise_conv_kernel_size=depthwise_conv_kernel_size).to(device)
-            start_step = 0
-            if do_pretrained:
-                checkpoint = torch.load(pretrained_path)
-                model.load_state_dict(checkpoint['model_state_dict'])
-                start_step = checkpoint['step']
 
-            # criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-            criterion = AdMSoftmaxLoss(s=15.0, m=0.1)
-            optimizer = AdamW(model.parameters(), lr=lr)
+            criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+            optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
             scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
             print(f"[Info]: Finish creating model!",flush = True)
 
@@ -531,7 +521,7 @@ def main(
             new_save_path = f'{save_path[:-5]}_d_model={d_model}_num_heads={num_heads}_ffn_dim={ffn_dim}_num_layers={num_layers}_dropout={dropout}_conv={depthwise_conv_kernel_size}_{datetime.datetime.now()}.ckpt'
             writer = SummaryWriter(f'runs/{new_save_path[:-5]}')
 
-            for step in range(start_step, start_step+total_steps):
+            for step in range(0, total_steps):
                 # Get data
                 try:
                     batch = next(train_iterator)
@@ -579,7 +569,7 @@ def main(
                 # Save the best model so far.
                 if (step + 1) % save_steps == 0 and best_state_dict is not None:
                     torch.save({
-                        'step': save_steps,
+                        'step': step+1,
                         'model_state_dict': best_state_dict,
                     }, new_save_path)
                     pbar.write(f"Step {step + 1}, best model saved. (accuracy={best_accuracy:.4f})")
@@ -589,7 +579,7 @@ def main(
             return best_accuracy
         
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=100)
+        study.optimize(objective, n_trials=1)
         print('Number of finished trials:', len(study.trials))
         print('Best trial parameters:', study.best_trial.params)
         print('Best score:', study.best_value)
@@ -616,11 +606,12 @@ def main(
         speaker_num = len(mapping["id2speaker"])
         model = Classifier(d_model=d_model, num_heads=num_heads, ffn_dim=ffn_dim, num_layers=num_layers, 
                            dropout=dropout, depthwise_conv_kernel_size=depthwise_conv_kernel_size).to(device)
-        checkpoint = torch.load(save_path)
+        checkpoint = torch.load(test_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
         print(f"[Info]: Finish creating model!",flush = True)
-
+        print(checkpoint['step'])
+        
         results = [["Id", "Category"]]
         for feat_paths, mels in tqdm(dataloader):
             with torch.no_grad():

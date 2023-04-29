@@ -112,8 +112,8 @@ from transformers import (
   AutoModelForQuestionAnswering,
 )
 
-model = AutoModelForQuestionAnswering.from_pretrained("bert-base-chinese").to(device)
-tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+model = AutoModelForQuestionAnswering.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large").to(device)
+tokenizer = AutoTokenizer.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large")
 
 # You can safely ignore the warning message (it pops up because new prediction heads for QA are initialized randomly)
 
@@ -173,7 +173,7 @@ class QA_Dataset(Dataset):
         self.max_paragraph_len = 150
         
         ##### TODO: Change value of doc_stride #####
-        self.doc_stride = 150
+        self.doc_stride = 32
 
         # Input sequence length = [CLS] + question + [SEP] + paragraph + [SEP]
         self.max_seq_len = 1 + self.max_question_len + 1 + self.max_paragraph_len + 1
@@ -194,8 +194,11 @@ class QA_Dataset(Dataset):
             answer_end_token = tokenized_paragraph.char_to_token(question["answer_end"])
 
             # A single window is obtained by slicing the portion of paragraph containing the answer
-            mid = (answer_start_token + answer_end_token) // 2
-            paragraph_start = max(0, min(mid - self.max_paragraph_len // 2, len(tokenized_paragraph) - self.max_paragraph_len))
+            # mid = (answer_start_token + answer_end_token) // 2
+            # paragraph_start = max(0, min(mid - self.max_paragraph_len // 2, len(tokenized_paragraph) - self.max_paragraph_len))
+            # paragraph_end = paragraph_start + self.max_paragraph_len
+            pos = random.randrange(answer_end_token - self.max_paragraph_len, answer_start_token)
+            paragraph_start = max(0, min(pos, len(tokenized_paragraph) - self.max_paragraph_len))
             paragraph_end = paragraph_start + self.max_paragraph_len
 
             # Slice question/paragraph and add special tokens (101: CLS, 102: SEP)
@@ -262,6 +265,9 @@ def evaluate(data, output):
         start_prob, start_index = torch.max(output.start_logits[k], dim=0)
         end_prob, end_index = torch.max(output.end_logits[k], dim=0)
         
+        if end_index <= start_index:
+            continue
+        
         # Probability of answer is calculated as sum of start_prob and end_prob
         prob = start_prob + end_prob
         
@@ -284,6 +290,8 @@ validation = True
 logging_step = 100
 learning_rate = 1e-5
 optimizer = AdamW(model.parameters(), lr=learning_rate)
+scheduler = transformers.get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader), last_epoch = -1)
 train_batch_size = 8
 
 #### TODO: gradient_accumulation (optional)####
@@ -343,6 +351,7 @@ for epoch in range(num_epoch):
         optimizer.zero_grad()
         
         ##### TODO: Apply linear learning rate decay #####
+        scheduler.step()
 
         # Print training loss and accuracy over past logging step
         if step % logging_step == 0:

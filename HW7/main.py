@@ -81,7 +81,7 @@ import numpy as np
 import random
 import torch
 from torch.utils.data import DataLoader, Dataset 
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW, get_cosine_with_hard_restarts_schedule_with_warmup
 
 from tqdm.auto import tqdm
 
@@ -296,7 +296,7 @@ train_batch_size = 8
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
 # If CUDA out of memory, you can make train_batch_size lower and gradient_accumulation_steps upper
 # Doc: https://huggingface.co/docs/accelerate/usage_guides/gradient_accumulation
-gradient_accumulation_steps = 16
+gradient_accumulation_steps = 8
 
 # dataloader
 # Note: Do NOT change batch size of dev_loader / test_loader !
@@ -305,8 +305,8 @@ train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=True, 
 dev_loader = DataLoader(dev_set, batch_size=1, shuffle=False, pin_memory=True)
 test_loader = DataLoader(test_set, batch_size=1, shuffle=False, pin_memory=True)
 
-scheduler = get_linear_schedule_with_warmup(
-    optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader), last_epoch = -1)
+scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+    optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))
 
 
 # Change "fp16_training" to True to support automatic mixed 

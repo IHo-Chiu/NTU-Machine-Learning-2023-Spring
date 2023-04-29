@@ -290,7 +290,7 @@ validation = True
 logging_step = 100
 learning_rate = 1e-5
 optimizer = AdamW(model.parameters(), lr=learning_rate)
-train_batch_size = 8
+train_batch_size = 16
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size

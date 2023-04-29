@@ -296,7 +296,7 @@ train_batch_size = 8
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
 # If CUDA out of memory, you can make train_batch_size lower and gradient_accumulation_steps upper
 # Doc: https://huggingface.co/docs/accelerate/usage_guides/gradient_accumulation
-gradient_accumulation_steps = 32
+gradient_accumulation_steps = 8
 
 # dataloader
 # Note: Do NOT change batch size of dev_loader / test_loader !

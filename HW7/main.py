@@ -81,7 +81,7 @@ import numpy as np
 import random
 import torch
 from torch.utils.data import DataLoader, Dataset 
-from transformers import AdamW
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 from tqdm.auto import tqdm
 
@@ -290,7 +290,7 @@ validation = True
 logging_step = 100
 learning_rate = 1e-5
 optimizer = AdamW(model.parameters(), lr=learning_rate)
-scheduler = transformers.get_linear_schedule_with_warmup(
+scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader), last_epoch = -1)
 train_batch_size = 8
 

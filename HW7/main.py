@@ -290,8 +290,6 @@ validation = True
 logging_step = 100
 learning_rate = 1e-5
 optimizer = AdamW(model.parameters(), lr=learning_rate)
-scheduler = get_linear_schedule_with_warmup(
-                optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader), last_epoch = -1)
 train_batch_size = 8
 
 #### TODO: gradient_accumulation (optional)####
@@ -306,6 +304,9 @@ gradient_accumulation_steps = 16
 train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=True, pin_memory=True)
 dev_loader = DataLoader(dev_set, batch_size=1, shuffle=False, pin_memory=True)
 test_loader = DataLoader(test_set, batch_size=1, shuffle=False, pin_memory=True)
+
+scheduler = get_linear_schedule_with_warmup(
+    optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader), last_epoch = -1)
 
 
 # Change "fp16_training" to True to support automatic mixed 

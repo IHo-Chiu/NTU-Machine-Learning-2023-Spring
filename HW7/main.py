@@ -173,7 +173,7 @@ class QA_Dataset(Dataset):
         self.max_paragraph_len = 150
         
         ##### TODO: Change value of doc_stride #####
-        self.doc_stride = 32
+        self.doc_stride = 1
 
         # Input sequence length = [CLS] + question + [SEP] + paragraph + [SEP]
         self.max_seq_len = 1 + self.max_question_len + 1 + self.max_paragraph_len + 1
@@ -265,7 +265,7 @@ def evaluate(data, output):
         start_prob, start_index = torch.max(output.start_logits[k], dim=0)
         end_prob, end_index = torch.max(output.end_logits[k], dim=0)
         
-        if end_index <= start_index:
+        if end_index < start_index:
             continue
         
         # Probability of answer is calculated as sum of start_prob and end_prob

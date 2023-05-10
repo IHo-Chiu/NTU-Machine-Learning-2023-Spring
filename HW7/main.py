@@ -285,7 +285,7 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
         end_logits = outputs[0].end_logits[k]
         for i in range(1, train_n_models):
             start_logits += outputs[i].start_logits[k]
-            end_logits = outputs[i].end_logits[k]
+            end_logits += outputs[i].end_logits[k]
         start_prob, start_index = torch.max(start_logits, dim=0)
         end_prob, end_index = torch.max(end_logits, dim=0)
         

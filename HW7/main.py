@@ -108,16 +108,16 @@ same_seeds(11922189)
 """
 
 # hyperparameters
-do_train = False
+do_train = True
 do_test = True
-num_epoch = 1
+num_epoch = 2
 validation = False
 logging_step = 100
 learning_rate = 1e-5
 train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model" 
-train_n_models = 2
+train_n_models = 10
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
@@ -310,13 +310,9 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
             origin_end = end_index + k * doc_stride - paragraph_start;
             
     if '[UNK]' in answer:
-        print("paragraph",paragraph)
-        print("paragraph_tokenized",paragraph_tokenized.tokens)
-        print("answer",answer)
         raw_start =  paragraph_tokenized.token_to_chars(origin_start)[0]
         raw_end = paragraph_tokenized.token_to_chars(origin_end)[1]
         answer = paragraph[raw_start:raw_end]
-        print("answer",answer)
     
     # Remove spaces in answer (e.g. "大 金" --> "大金")
     return answer.replace(' ','')

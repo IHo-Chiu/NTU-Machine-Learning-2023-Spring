@@ -124,7 +124,7 @@ train_n_models = 1
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
 # If CUDA out of memory, you can make train_batch_size lower and gradient_accumulation_steps upper
 # Doc: https://huggingface.co/docs/accelerate/usage_guides/gradient_accumulation
-gradient_accumulation_steps = 4
+gradient_accumulation_steps = 8
 
 from transformers import (
   AutoTokenizer,

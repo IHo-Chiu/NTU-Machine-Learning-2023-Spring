@@ -108,7 +108,7 @@ same_seeds(11922189)
 """
 
 # hyperparameters
-do_train = False
+do_train = True
 num_epoch = 2
 validation = False
 logging_step = 100

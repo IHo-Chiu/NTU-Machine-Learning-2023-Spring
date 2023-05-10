@@ -109,12 +109,15 @@ same_seeds(11922189)
 
 # hyperparameters
 do_train = True
-num_epoch = 2
+do_test = True
+num_epoch = 1
 validation = False
 logging_step = 100
 learning_rate = 1e-5
-train_batch_size = 8
+train_batch_size = 2
 doc_stride = 32
+model_save_dir = "saved_model" 
+train_n_models = 2
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
@@ -278,8 +281,13 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
     
     for k in range(num_of_windows):
         # Obtain answer by choosing the most probable start position / end position
-        start_prob, start_index = torch.max(output.start_logits[k], dim=0)
-        end_prob, end_index = torch.max(output.end_logits[k], dim=0)
+        start_logits = outputs[0].start_logits[k]
+        end_logits = outputs[0].end_logits[k]
+        for i in range(1, train_n_models):
+            start_logits += outputs[i].start_logits[k]
+            end_logits = outputs[i].end_logits[k]
+        start_prob, start_index = torch.max(start_logits, dim=0)
+        end_prob, end_index = torch.max(end_logits, dim=0)
         
         token_type_id = data[1][0][k].detach().cpu().numpy()
         paragraph_start = token_type_id.argmax()
@@ -320,105 +328,116 @@ test_loader = DataLoader(test_set, batch_size=1, shuffle=False, pin_memory=True)
 
 print(len(train_loader))
 
-optimizer = AdamW(model.parameters(), lr=learning_rate)
-scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
-    optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))
-
-
-# Change "fp16_training" to True to support automatic mixed 
-# precision training (fp16)	
-fp16_training = True
-if fp16_training:    
-    accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=gradient_accumulation_steps)
-else:
-    accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
-
-# Documentation for the toolkit:  https://huggingface.co/docs/accelerate/
-model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader) 
-
 if do_train:
-    model.train()
+    
+    for i in range(train_n_models):
+        model = AutoModelForQuestionAnswering.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large").to(device)
+
+        optimizer = AdamW(model.parameters(), lr=learning_rate)
+        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+            optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))
 
 
-    print("Start Training ...")
+        # Change "fp16_training" to True to support automatic mixed 
+        # precision training (fp16)	
+        fp16_training = True
+        if fp16_training:    
+            accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=gradient_accumulation_steps)
+        else:
+            accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
 
-    for epoch in range(num_epoch):
-        step = 1
-        train_loss = train_acc = 0
+        # Documentation for the toolkit:  https://huggingface.co/docs/accelerate/
+        model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader) 
 
-        for data in tqdm(train_loader):	
-            # Load all data into GPU
-            data = [i.to(device) for i in data]
+        model.train()
 
-            # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
-            # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
-            output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
-            # Choose the most probable start position / end position
-            start_index = torch.argmax(output.start_logits, dim=1)
-            end_index = torch.argmax(output.end_logits, dim=1)
 
-            # Prediction is correct only if both start_index and end_index are correct
-            train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
+        print("Start Training ...")
 
-            train_loss += output.loss
+        for epoch in range(num_epoch):
+            step = 1
+            train_loss = train_acc = 0
 
-            accelerator.backward(output.loss)
+            for data in tqdm(train_loader):	
+                # Load all data into GPU
+                data = [i.to(device) for i in data]
 
-            step += 1
-            optimizer.step()
-            optimizer.zero_grad()
+                # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
+                # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
+                output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
+                # Choose the most probable start position / end position
+                start_index = torch.argmax(output.start_logits, dim=1)
+                end_index = torch.argmax(output.end_logits, dim=1)
 
-            ##### TODO: Apply linear learning rate decay #####
-            scheduler.step()
+                # Prediction is correct only if both start_index and end_index are correct
+                train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
 
-            # Print training loss and accuracy over past logging step
-            if step % logging_step == 0:
-                print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
-                train_loss = train_acc = 0
+                train_loss += output.loss
 
-        if validation:
-            print("Evaluating Dev Set ...")
-            model.eval()
-            with torch.no_grad():
-                dev_acc = 0
-                for i, data in enumerate(tqdm(dev_loader)):
-                    output = model(input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
-                           attention_mask=data[2].squeeze(dim=0).to(device))
-                    # prediction is correct only if answer text exactly matches
-                    dev_acc += evaluate(data, output) == dev_questions[i]["answer_text"]
-                print(f"Validation | Epoch {epoch + 1} | acc = {dev_acc / len(dev_loader):.3f}")
-            model.train()
+                accelerator.backward(output.loss)
 
-    # Save a model and its configuration file to the directory 「saved_model」 
-    # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
-    # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
-    print("Saving Model ...")
-    model_save_dir = "saved_model" 
-    model.save_pretrained(model_save_dir)
+                step += 1
+                optimizer.step()
+                optimizer.zero_grad()
+
+                ##### TODO: Apply linear learning rate decay #####
+                scheduler.step()
+
+                # Print training loss and accuracy over past logging step
+                if step % logging_step == 0:
+                    print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
+                    train_loss = train_acc = 0
+
+            if validation:
+                print("Evaluating Dev Set ...")
+                model.eval()
+                with torch.no_grad():
+                    dev_acc = 0
+                    for i, data in enumerate(tqdm(dev_loader)):
+                        output = model(input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
+                               attention_mask=data[2].squeeze(dim=0).to(device))
+                        # prediction is correct only if answer text exactly matches
+                        dev_acc += evaluate(data, output) == dev_questions[i]["answer_text"]
+                    print(f"Validation | Epoch {epoch + 1} | acc = {dev_acc / len(dev_loader):.3f}")
+                model.train()
+
+        # Save a model and its configuration file to the directory 「saved_model」 
+        # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
+        # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
+        print("Saving Model ...")
+        model.save_pretrained(f'{model_save_dir}_{i}')
 
 """## Testing"""
 
-print("Evaluating Test Set ...")
+if do_test:
 
-result = []
-model = AutoModelForQuestionAnswering.from_pretrained("saved_model").to(device)
-model.eval()
-with torch.no_grad():
-    for i, data in enumerate(tqdm(test_loader)):
-        output = model(input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
-                       attention_mask=data[2].squeeze(dim=0).to(device))
-        result.append(evaluate(data, output, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]],
-                               paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
+    print("Evaluating Test Set ...")
 
-result_file = "result.csv"
-with open(result_file, 'w', encoding='utf-8-sig') as f:	
-    f.write("ID,Answer\n")
-    for i, test_question in enumerate(test_questions):
-    # Replace commas in answers with empty strings (since csv is separated by comma)
-    # Answers in kaggle are processed in the same way
-        f.write(f"{test_question['id']},{result[i].replace(',','')}\n")
+    result = []
+    models = []
+    for i in range(train_n_models):
+        model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
+        model.eval()
+        models.append(model)
+    with torch.no_grad():
+        for i, data in enumerate(tqdm(test_loader)):
+            outputs = []
+            for i in range(train_n_models):
+                output = models[i](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
+                               attention_mask=data[2].squeeze(dim=0).to(device))
+                outputs.append(output)
+            result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]],
+                                   paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
 
-print(f"Completed! Result is in {result_file}")
+    result_file = "result.csv"
+    with open(result_file, 'w', encoding='utf-8-sig') as f:	
+        f.write("ID,Answer\n")
+        for i, test_question in enumerate(test_questions):
+        # Replace commas in answers with empty strings (since csv is separated by comma)
+        # Answers in kaggle are processed in the same way
+            f.write(f"{test_question['id']},{result[i].replace(',','')}\n")
+
+    print(f"Completed! Result is in {result_file}")
 
 # """# GradeScope - Question 2 (In-context learning)
 

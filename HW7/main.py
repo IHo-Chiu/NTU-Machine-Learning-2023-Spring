@@ -76,6 +76,7 @@ Documentation for the toolkit:
 ## Import Packages
 """
 
+import gc
 import json
 import numpy as np
 import random
@@ -408,6 +409,11 @@ if do_train:
         # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
         print("Saving Model ...")
         model.save_pretrained(f'{model_save_dir}_{i}')
+        
+        model.cpu()
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
 
 """## Testing"""
 
@@ -428,8 +434,7 @@ if do_test:
                 output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
                                attention_mask=data[2].squeeze(dim=0).to(device))
                 outputs.append(output)
-            result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]],
-                                   paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
+            result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]], paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
 
     result_file = "result.csv"
     with open(result_file, 'w', encoding='utf-8-sig') as f:	

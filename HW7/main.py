@@ -114,7 +114,7 @@ num_epoch = 1
 validation = False
 logging_step = 100
 learning_rate = 1e-5
-train_batch_size = 16
+train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model" 
 train_n_models = 2
@@ -123,7 +123,7 @@ train_n_models = 2
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
 # If CUDA out of memory, you can make train_batch_size lower and gradient_accumulation_steps upper
 # Doc: https://huggingface.co/docs/accelerate/usage_guides/gradient_accumulation
-gradient_accumulation_steps = 4
+gradient_accumulation_steps = 8
 
 from transformers import (
   AutoTokenizer,

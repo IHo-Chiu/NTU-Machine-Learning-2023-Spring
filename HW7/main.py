@@ -109,14 +109,14 @@ same_seeds(11922189)
 """
 
 # hyperparameters
-do_train = True
+do_train = False
 do_test = True
 num_epoch = 1
 validation = False
 logging_step = 100
 learning_rate = 1e-5
 train_batch_size = 8
-doc_stride = 32
+doc_stride = 150
 model_save_dir = "saved_model" 
 train_n_models = 1
 

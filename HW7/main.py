@@ -286,6 +286,8 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
         for i in range(1, train_n_models):
             start_logits += outputs[i].start_logits[k]
             end_logits += outputs[i].end_logits[k]
+        start_logits /= train_n_models
+        end_logits /= train_n_models
         start_prob, start_index = torch.max(start_logits, dim=0)
         end_prob, end_index = torch.max(end_logits, dim=0)
         
@@ -308,9 +310,13 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
             origin_end = end_index + k * doc_stride - paragraph_start;
             
     if '[UNK]' in answer:
+        print("paragraph",paragraph)
+        print("paragraph",paragraph.tokenized.tokens)
+        print("answer",answer)
         raw_start =  paragraph_tokenized.token_to_chars(origin_start)[0]
         raw_end = paragraph_tokenized.token_to_chars(origin_end)[1]
         answer = paragraph[raw_start:raw_end]
+        print("answer",answer)
     
     # Remove spaces in answer (e.g. "大 金" --> "大金")
     return answer.replace(' ','')

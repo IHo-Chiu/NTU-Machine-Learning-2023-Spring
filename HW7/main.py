@@ -406,11 +406,11 @@ if do_train:
                 print(f"Validation | Epoch {epoch + 1} | acc = {dev_acc / len(dev_loader):.3f}")
             model.train()
 
-    # Save a model and its configuration file to the directory 「saved_model」 
-    # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
-    # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
-    print("Saving Model ...")
-    model.save_pretrained(f'{model_save_dir}_{epoch}')
+        # Save a model and its configuration file to the directory 「saved_model」 
+        # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
+        # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
+        print("Saving Model ...")
+        model.save_pretrained(f'{model_save_dir}_{epoch}')
 
 """## Testing"""
 

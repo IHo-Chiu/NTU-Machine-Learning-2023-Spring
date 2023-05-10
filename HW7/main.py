@@ -112,14 +112,13 @@ same_seeds(11922189)
 load_pretrain = False
 do_train = True
 do_test = True
-num_epoch = 2
+num_epoch = 10
 validation = False
 logging_step = 100
 learning_rate = 1e-5
 train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model" 
-train_n_models = 10
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
@@ -333,92 +332,85 @@ test_loader = DataLoader(test_set, batch_size=1, shuffle=False, pin_memory=True)
 print(len(train_loader))
 
 if do_train:
-    
-    for i in range(train_n_models):
-        if load_pretrain:
-            model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
-        else:
-            model = AutoModelForQuestionAnswering.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large").to(device)
+    if load_pretrain:
+        model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
+    else:
+        model = AutoModelForQuestionAnswering.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large").to(device)
 
-        optimizer = AdamW(model.parameters(), lr=learning_rate)
-        scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
-            optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+        optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))
 
 
-        # Change "fp16_training" to True to support automatic mixed 
-        # precision training (fp16)	
-        fp16_training = True
-        if fp16_training:    
-            accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=gradient_accumulation_steps)
-        else:
-            accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
+    # Change "fp16_training" to True to support automatic mixed 
+    # precision training (fp16)	
+    fp16_training = True
+    if fp16_training:    
+        accelerator = Accelerator(mixed_precision="fp16", gradient_accumulation_steps=gradient_accumulation_steps)
+    else:
+        accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
 
-        # Documentation for the toolkit:  https://huggingface.co/docs/accelerate/
-        model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader) 
+    # Documentation for the toolkit:  https://huggingface.co/docs/accelerate/
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader) 
 
-        model.train()
+    model.train()
 
 
-        print("Start Training ...")
+    print("Start Training ...")
 
-        for epoch in range(num_epoch):
-            step = 1
-            train_loss = train_acc = 0
+    for epoch in range(num_epoch):
+        step = 1
+        train_loss = train_acc = 0
 
-            for data in tqdm(train_loader):	
-                with accelerator.accumulate(model):
-                    # Load all data into GPU
-                    data = [i.to(device) for i in data]
+        for data in tqdm(train_loader):	
+            with accelerator.accumulate(model):
+                # Load all data into GPU
+                data = [i.to(device) for i in data]
 
-                    # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
-                    # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
-                    output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
-                    # Choose the most probable start position / end position
-                    start_index = torch.argmax(output.start_logits, dim=1)
-                    end_index = torch.argmax(output.end_logits, dim=1)
+                # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
+                # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
+                output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
+                # Choose the most probable start position / end position
+                start_index = torch.argmax(output.start_logits, dim=1)
+                end_index = torch.argmax(output.end_logits, dim=1)
 
-                    # Prediction is correct only if both start_index and end_index are correct
-                    train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
+                # Prediction is correct only if both start_index and end_index are correct
+                train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
 
-                    train_loss += output.loss
+                train_loss += output.loss
 
-                    accelerator.backward(output.loss)
+                accelerator.backward(output.loss)
 
-                    step += 1
-                    optimizer.step()
-                    optimizer.zero_grad()
+                step += 1
+                optimizer.step()
+                optimizer.zero_grad()
 
-                    ##### TODO: Apply linear learning rate decay #####
-                    scheduler.step()
+                ##### TODO: Apply linear learning rate decay #####
+                scheduler.step()
 
-                    # Print training loss and accuracy over past logging step
-                    if step % logging_step == 0:
-                        print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
-                        train_loss = train_acc = 0
+                # Print training loss and accuracy over past logging step
+                if step % logging_step == 0:
+                    print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
+                    train_loss = train_acc = 0
 
-            if validation:
-                print("Evaluating Dev Set ...")
-                model.eval()
-                with torch.no_grad():
-                    dev_acc = 0
-                    for i, data in enumerate(tqdm(dev_loader)):
-                        output = model(input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
-                               attention_mask=data[2].squeeze(dim=0).to(device))
-                        # prediction is correct only if answer text exactly matches
-                        dev_acc += evaluate(data, output) == dev_questions[i]["answer_text"]
-                    print(f"Validation | Epoch {epoch + 1} | acc = {dev_acc / len(dev_loader):.3f}")
-                model.train()
+        if validation:
+            print("Evaluating Dev Set ...")
+            model.eval()
+            with torch.no_grad():
+                dev_acc = 0
+                for i, data in enumerate(tqdm(dev_loader)):
+                    output = model(input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
+                           attention_mask=data[2].squeeze(dim=0).to(device))
+                    # prediction is correct only if answer text exactly matches
+                    dev_acc += evaluate(data, output) == dev_questions[i]["answer_text"]
+                print(f"Validation | Epoch {epoch + 1} | acc = {dev_acc / len(dev_loader):.3f}")
+            model.train()
 
-        # Save a model and its configuration file to the directory 「saved_model」 
-        # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
-        # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
-        print("Saving Model ...")
-        model.save_pretrained(f'{model_save_dir}_{i}')
-        
-        model.cpu()
-        del model
-        gc.collect()
-        torch.cuda.empty_cache()
+    # Save a model and its configuration file to the directory 「saved_model」 
+    # i.e. there are two files under the direcory 「saved_model」: 「pytorch_model.bin」 and 「config.json」
+    # Saved model can be re-loaded using 「model = BertForQuestionAnswering.from_pretrained("saved_model")」
+    print("Saving Model ...")
+    model.save_pretrained(f'{model_save_dir}_{epoch}')
 
 """## Testing"""
 
@@ -428,7 +420,7 @@ if do_test:
 
     result = []
     models = []
-    for i in range(train_n_models):
+    for i in range(num_epoch):
         model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
         model.eval()
         models.append(model)

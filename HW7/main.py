@@ -110,12 +110,12 @@ same_seeds(11922189)
 
 # hyperparameters
 load_pretrain = False
-do_train = False
+do_train = True
 do_test = True
 num_epoch = 8
 validation = False
 logging_step = 100
-learning_rate = 1e-5
+learning_rate = 5e-5
 train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model2" 

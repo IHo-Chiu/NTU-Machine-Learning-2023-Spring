@@ -311,7 +311,7 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
             
     if '[UNK]' in answer:
         print("paragraph",paragraph)
-        print("paragraph",paragraph_tokenized.tokens)
+        print("paragraph_tokenized",paragraph_tokenized.tokens)
         print("answer",answer)
         raw_start =  paragraph_tokenized.token_to_chars(origin_start)[0]
         raw_end = paragraph_tokenized.token_to_chars(origin_end)[1]
@@ -428,8 +428,8 @@ if do_test:
     with torch.no_grad():
         for i, data in enumerate(tqdm(test_loader)):
             outputs = []
-            for i in range(train_n_models):
-                output = models[i](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
+            for j in range(train_n_models):
+                output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
                                attention_mask=data[2].squeeze(dim=0).to(device))
                 outputs.append(output)
             result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]],

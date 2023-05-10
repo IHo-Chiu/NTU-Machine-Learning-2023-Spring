@@ -118,7 +118,7 @@ learning_rate = 1e-5
 train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model" 
-train_n_models = 10
+train_n_models = 1
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size

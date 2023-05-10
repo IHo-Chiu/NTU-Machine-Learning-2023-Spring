@@ -112,7 +112,7 @@ same_seeds(11922189)
 load_pretrain = False
 do_train = False
 do_test = True
-num_epoch = 5
+num_epoch = 8
 validation = False
 logging_step = 100
 learning_rate = 1e-5

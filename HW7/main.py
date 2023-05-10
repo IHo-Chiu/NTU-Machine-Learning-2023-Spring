@@ -427,7 +427,7 @@ if do_test:
     with torch.no_grad():
         for i, data in enumerate(tqdm(test_loader)):
             outputs = []
-            for j in range(train_n_models):
+            for j in range(num_epoch):
                 output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
                                attention_mask=data[2].squeeze(dim=0).to(device))
                 outputs.append(output)

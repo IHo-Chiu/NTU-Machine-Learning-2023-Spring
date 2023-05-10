@@ -362,34 +362,35 @@ if do_train:
             train_loss = train_acc = 0
 
             for data in tqdm(train_loader):	
-                # Load all data into GPU
-                data = [i.to(device) for i in data]
+                with accelerator.accumulate(model):
+                    # Load all data into GPU
+                    data = [i.to(device) for i in data]
 
-                # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
-                # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
-                output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
-                # Choose the most probable start position / end position
-                start_index = torch.argmax(output.start_logits, dim=1)
-                end_index = torch.argmax(output.end_logits, dim=1)
+                    # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
+                    # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
+                    output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
+                    # Choose the most probable start position / end position
+                    start_index = torch.argmax(output.start_logits, dim=1)
+                    end_index = torch.argmax(output.end_logits, dim=1)
 
-                # Prediction is correct only if both start_index and end_index are correct
-                train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
+                    # Prediction is correct only if both start_index and end_index are correct
+                    train_acc += ((start_index == data[3]) & (end_index == data[4])).float().mean()
 
-                train_loss += output.loss
+                    train_loss += output.loss
 
-                accelerator.backward(output.loss)
+                    accelerator.backward(output.loss)
 
-                step += 1
-                optimizer.step()
-                optimizer.zero_grad()
+                    step += 1
+                    optimizer.step()
+                    optimizer.zero_grad()
 
-                ##### TODO: Apply linear learning rate decay #####
-                scheduler.step()
+                    ##### TODO: Apply linear learning rate decay #####
+                    scheduler.step()
 
-                # Print training loss and accuracy over past logging step
-                if step % logging_step == 0:
-                    print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
-                    train_loss = train_acc = 0
+                    # Print training loss and accuracy over past logging step
+                    if step % logging_step == 0:
+                        print(f"Epoch {epoch + 1} | Step {step} | loss = {train_loss.item() / logging_step:.3f}, acc = {train_acc / logging_step:.3f}")
+                        train_loss = train_acc = 0
 
             if validation:
                 print("Evaluating Dev Set ...")

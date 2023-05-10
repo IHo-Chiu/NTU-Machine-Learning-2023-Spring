@@ -311,7 +311,7 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
             
     if '[UNK]' in answer:
         print("paragraph",paragraph)
-        print("paragraph",paragraph.tokenized.tokens)
+        print("paragraph",paragraph_tokenized.tokens)
         print("answer",answer)
         raw_start =  paragraph_tokenized.token_to_chars(origin_start)[0]
         raw_end = paragraph_tokenized.token_to_chars(origin_end)[1]

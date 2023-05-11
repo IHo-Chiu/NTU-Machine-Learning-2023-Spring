@@ -119,6 +119,7 @@ learning_rate = 5e-5
 train_batch_size = 8
 doc_stride = 32
 model_save_dir = "saved_model2" 
+ensemble_list = ["saved_model_1", "saved_model_2", "saved_model2_1", "saved_model2_2"]
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size
@@ -420,14 +421,14 @@ if do_test:
 
     result = []
     models = []
-    for i in range(num_epoch):
+    for i in range(len(ensemble_list)):
         model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
         model.eval()
         models.append(model)
     with torch.no_grad():
         for i, data in enumerate(tqdm(test_loader)):
             outputs = []
-            for j in range(num_epoch):
+            for j in range(len(ensemble_list)):
                 output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
                                attention_mask=data[2].squeeze(dim=0).to(device))
                 outputs.append(output)

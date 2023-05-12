@@ -119,9 +119,9 @@ validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 64
+doc_stride = 32
 model_save_dir = "saved_model"
-ensemble_list = ["saved_model_1", ]
+ensemble_list = ["saved_model2_1", ]
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size

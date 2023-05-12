@@ -119,7 +119,7 @@ validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 64
+doc_stride = 32
 model_save_dir = "saved_model"
 ensemble_list = ["saved_model2_1", ]
 
@@ -424,7 +424,7 @@ if do_test:
     result = []
     models = []
     for i in range(len(ensemble_list)):
-        model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
+        model = AutoModelForQuestionAnswering.from_pretrained(ensemble_list[i]).to(device)
         model.eval()
         models.append(model)
     with torch.no_grad():

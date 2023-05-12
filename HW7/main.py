@@ -274,7 +274,7 @@ train_set = torch.utils.data.ConcatDataset([train_set, dev_set])
 
 """## Function for Evaluation"""
 
-def evaluate(data, output, paragraph, paragraph_tokenized):
+def evaluate(data, output, paragraph, paragraph_tokenized, doc_stride=doc_stride):
     ##### TODO: Postprocessing #####
     # There is a bug and room for improvement in postprocessing 
     # Hint: Open your prediction file to see what is wrong 

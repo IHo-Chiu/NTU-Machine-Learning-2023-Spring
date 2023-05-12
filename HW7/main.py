@@ -119,7 +119,7 @@ validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 64
+doc_stride = 128
 model_save_dir = "saved_model"
 ensemble_list = ["saved_model2_1", ]
 

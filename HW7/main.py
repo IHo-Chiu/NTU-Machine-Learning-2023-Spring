@@ -112,7 +112,7 @@ same_seeds(11922189)
 
 # hyperparameters
 load_pretrain = False
-do_train = False
+do_train = True
 do_test = True
 num_epoch = 2
 validation = False
@@ -120,8 +120,8 @@ logging_step = 100
 learning_rate = 3e-5
 train_batch_size = 8
 doc_stride = 128
-model_save_dir = "saved_model3"
-ensemble_list = ["saved_model3_1", ]
+model_save_dir = "saved_model"
+ensemble_list = [f"{model_save_dir}_{num_epoch-1}", ]
 
 #### TODO: gradient_accumulation (optional)####
 # Note: train_batch_size * gradient_accumulation_steps = effective batch size

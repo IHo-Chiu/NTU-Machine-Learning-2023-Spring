@@ -119,7 +119,7 @@ validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 32
+doc_stride = 64
 model_save_dir = "saved_model"
 ensemble_list = ["saved_model2_1", ]
 
@@ -319,7 +319,12 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
         answer = paragraph[raw_start:raw_end]
     
     # Remove spaces in answer (e.g. "大 金" --> "大金")
-    return answer.replace(' ','')
+    answer = answer.replace(' ','')
+    if '「' in answer and '」' not in answer:
+        answer = answer.replace('「','')
+    if '「' not in answer and '」' in answer:
+        answer = answer.replace('','」')
+    return answer
 
 """## Training"""
 

@@ -114,12 +114,12 @@ same_seeds(11922189)
 load_pretrain = False
 do_train = False
 do_test = True
-num_epoch = 2
+num_epoch = 1
 validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 64
+doc_stride = 32
 model_save_dir = "saved_model"
 ensemble_list = ["saved_model2_1", ]
 

@@ -119,7 +119,7 @@ validation = False
 logging_step = 100
 learning_rate = 5e-5
 train_batch_size = 8
-doc_stride = 128
+doc_stride = 64
 model_save_dir = "saved_model"
 ensemble_list = ["saved_model2_0", ]
 
@@ -323,7 +323,7 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
     if '「' in answer and '」' not in answer:
         answer = answer.replace('「','')
     if '「' not in answer and '」' in answer:
-        answer = answer.replace('','」')
+        answer = answer.replace('」','')
     return answer
 
 """## Training"""

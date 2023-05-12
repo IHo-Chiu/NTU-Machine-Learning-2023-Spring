@@ -111,7 +111,6 @@ same_seeds(11922189)
 
 
 # hyperparameters
-load_pretrain = False
 do_train = True
 do_test = True
 num_epoch = 2
@@ -345,11 +344,6 @@ test_loader = DataLoader(test_set, batch_size=1, shuffle=False, pin_memory=True)
 print(len(train_loader))
 
 if do_train:
-    if load_pretrain:
-        model = AutoModelForQuestionAnswering.from_pretrained(f'{model_save_dir}_{i}').to(device)
-    else:
-        model = AutoModelForQuestionAnswering.from_pretrained("luhua/chinese_pretrain_mrc_macbert_large").to(device)
-
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
         optimizer, num_warmup_steps=100, num_training_steps=num_epoch*len(train_loader))

@@ -442,7 +442,7 @@ if do_test:
             outputs = []
             for j in range(len(ensemble_list)):
                 output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
-                               attention_mask=data[2].squeeze(dim=0).to(device), test_set.doc_stride)
+                               attention_mask=data[2].squeeze(dim=0).to(device), doc_stride=test_set.doc_stride)
                 outputs.append(output)
             result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]], paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
 

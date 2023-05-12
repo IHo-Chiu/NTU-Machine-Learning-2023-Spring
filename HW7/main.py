@@ -274,7 +274,7 @@ train_set = torch.utils.data.ConcatDataset([train_set, dev_set])
 
 """## Function for Evaluation"""
 
-def evaluate(data, output, doc_stride=doc_stride, paragraph, paragraph_tokenized):
+def evaluate(data, output, paragraph, paragraph_tokenized, doc_stride):
     ##### TODO: Postprocessing #####
     # There is a bug and room for improvement in postprocessing 
     # Hint: Open your prediction file to see what is wrong 
@@ -382,7 +382,7 @@ if do_train:
 
                 # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
                 # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
-                output = model(input_ids=data[0], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
+                output = model(input_ids=data[0], attention_mask=data[2], start_positions=data[3], end_positions=data[4], doc_stride)
                 # Choose the most probable start position / end position
                 start_index = torch.argmax(output.start_logits, dim=1)
                 end_index = torch.argmax(output.end_logits, dim=1)
@@ -442,7 +442,7 @@ if do_test:
             outputs = []
             for j in range(len(ensemble_list)):
                 output = models[j](input_ids=data[0].squeeze(dim=0).to(device), token_type_ids=data[1].squeeze(dim=0).to(device),
-                               attention_mask=data[2].squeeze(dim=0).to(device))
+                               attention_mask=data[2].squeeze(dim=0).to(device), doc_stride)
                 outputs.append(output)
             result.append(evaluate(data, outputs, doc_stride=doc_stride, paragraph=test_paragraphs[test_questions[i]["paragraph_id"]], paragraph_tokenized=test_paragraphs_tokenized[test_questions[i]["paragraph_id"]]))
 

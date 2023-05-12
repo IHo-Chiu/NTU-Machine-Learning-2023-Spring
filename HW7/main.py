@@ -274,7 +274,7 @@ train_set = torch.utils.data.ConcatDataset([train_set, dev_set])
 
 """## Function for Evaluation"""
 
-def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph=None, paragraph_tokenized=None):
+def evaluate(data, output, doc_stride=doc_stride, paragraph, paragraph_tokenized):
     ##### TODO: Postprocessing #####
     # There is a bug and room for improvement in postprocessing 
     # Hint: Open your prediction file to see what is wrong 
@@ -297,9 +297,12 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
         
         token_type_id = data[1][0][k].detach().cpu().numpy()
         paragraph_start = token_type_id.argmax()
-        paragraph_end = len(token_type_id) - 1 - token_type_id[::-1].argmax()-1
+        paragraph_end = len(token_type_id) - token_type_id[::-1].argmax() - 2
         
-        if end_index < start_index or start_index < paragraph_start or end_index > paragraph_end:
+        if end_index < start_index:
+            continue
+            
+        if start_index < paragraph_start or end_index > paragraph_end:
             continue
         
         # Probability of answer is calculated as sum of start_prob and end_prob
@@ -310,20 +313,22 @@ def evaluate(data, output, doc_stride=doc_stride, token_type_ids=None, paragraph
             max_prob = prob
             # Convert tokens to chars (e.g. [1920, 7032] --> "大 金")
             answer = tokenizer.decode(data[0][0][k][start_index : end_index + 1])
-            origin_start = start_index + k * doc_stride - paragraph_start
-            origin_end = end_index + k * doc_stride - paragraph_start;
             
-    if '[UNK]' in answer:
-        raw_start =  paragraph_tokenized.token_to_chars(origin_start)[0]
-        raw_end = paragraph_tokenized.token_to_chars(origin_end)[1]
-        answer = paragraph[raw_start:raw_end]
+            if '[UNK]' in answer:
+                answer_start = start_index + k * doc_stride - paragraph_start
+                answer_end = end_index + k * doc_stride - paragraph_start;
+                answer_start =  paragraph_tokenized.token_to_chars(answer_start)[0]
+                answer_end = paragraph_tokenized.token_to_chars(answer_end)[1]
+                answer = paragraph[answer_start:answer_end]
     
     # Remove spaces in answer (e.g. "大 金" --> "大金")
     answer = answer.replace(' ','')
+    
     if '「' in answer and '」' not in answer:
         answer = answer.replace('「','')
     if '「' not in answer and '」' in answer:
         answer = answer.replace('」','')
+        
     return answer
 
 """## Training"""
@@ -377,7 +382,7 @@ if do_train:
 
                 # Model inputs: input_ids, token_type_ids, attention_mask, start_positions, end_positions (Note: only "input_ids" is mandatory)
                 # Model outputs: start_logits, end_logits, loss (return when start_positions/end_positions are provided)  
-                output = model(input_ids=data[0], token_type_ids=data[1], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
+                output = model(input_ids=data[0], attention_mask=data[2], start_positions=data[3], end_positions=data[4])
                 # Choose the most probable start position / end position
                 start_index = torch.argmax(output.start_logits, dim=1)
                 end_index = torch.argmax(output.end_logits, dim=1)

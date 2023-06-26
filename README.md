@@ -14,3 +14,4 @@
 | 6 | Generative Model | 0.705 (boss) | 0.705 (boss) | Top 38% (190/502) | 
 | 7 | BERT | 0.84676 (boss) | 0.84903 (boss) | Top 11% (67/612) |
 | 8 | Auto-encoder | 0.85157 (boss) | 0.85785 (boss) | Top 3% (22/574) |
+|13 | Network Compression | 0.86654 (boss) | 0.85031 (boss) | Top 1% (5/297) |
